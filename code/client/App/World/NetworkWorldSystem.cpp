@@ -94,7 +94,10 @@ bool NetworkWorldSystem::Spawn(uint64_t aServerId, const Red::Vector4& aPosition
     apprSystem->SetEntityName(id, acUsername);
 
     if (!id.IsDynamic())
+    {
+        spdlog::warn("[Spawn] entity id is not dynamic - bailing out for remote id {}", aServerId);
         return false;
+    }
 
     // Register BEFORE the entity finishes assembling. The animation-thread hook
     // identifies our puppets through this registry instead of reading the entity's
