@@ -258,5 +258,15 @@ public static partial class CampaignServer
 
 	public static partial void ReportRevive_Impl(ulong playerId, ulong puppetId);
 
+	[ServerRpc(Class = 17961805562553929976, Function = 3739468533096816368)]
+	public static void ReportBledOut(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+
+		ReportBledOut_Impl(playerId);
+	}
+
+	public static partial void ReportBledOut_Impl(ulong playerId);
+
 }
 }

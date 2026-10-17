@@ -298,9 +298,14 @@ ranny i czy żyje (`Plugins/CampaignCombat.reds`, serwer `CampaignCombat.cs`):
   (`ReportNpcHits` → `ApplyNpcHits`), gra hosta odejmuje je przez `StatPoolsSystem`.
   Zabicie kopii przez gościa zabija NPC u hosta — zabójstwo w dowolnej grze jest ostateczne.
 - **Gracze**: gdy w świecie są ≥2 osoby, V jest `Immortal` (serwer wysyła liczbę graczy
-  `CoopPlayers`). Przy zdrowiu ≤1% V jest **powalony**: nietykalny, przykucnięty, bez broni
-  i skoku; reszta dostaje komunikat (`PlayerDowned`). Kto stoi ≤2,5 m od powalonego przez
-  4 s, podnosi go (`ReportRevive` → `Revived`, 35% zdrowia). Gdy wszyscy w świecie leżą,
+  `CoopPlayers`). Przy zdrowiu ≤1% V jest **powalony**: nietykalny, przykucnięty, bez ruchu,
+  broni i skoku; u pozostałych jego postać pada na ziemię jak powalony towarzysz
+  (`BaseStatusEffect.FollowerDefeatedStory`, jak Jackie/Panam) i dostają komunikat
+  (`PlayerDowned`). Kto stoi ≤2,5 m od powalonego przez 4 s, podnosi go
+  (`ReportRevive` → `Revived`, 35% zdrowia). **Nikt nie podniesie w 45 s → śmierć**
+  (licznik na ekranie, `ReportBledOut`): V hosta ginie naprawdę (ekran śmierci, wczytanie
+  zapisu — fabuła jest u hosta), gość odradza się obok hosta z 50% zdrowia (`Respawn`), bo
+  jego własna śmierć wczytałaby jego zapis i wyrzuciła go z fabuły. Gdy wszyscy w świecie leżą,
   serwer zabija V hosta naprawdę (`CoopWipe`: ekran śmierci i wczytanie zapisu), a goście
   wstają, gdy host wróci do świata. Zostaje jeden gracz → powaleni wstają.
 

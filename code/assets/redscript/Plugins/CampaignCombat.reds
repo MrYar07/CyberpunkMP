@@ -19,7 +19,8 @@ import CyberpunkMP.World.*
 //
 // Players: while someone else is in the world, V cannot die (Immortal). At zero health V is
 // downed - crouched, no weapons, invulnerable - until a teammate stands next to them for a
-// few seconds. When everyone is down the server kills the host's V for real.
+// few seconds; nobody within 45 s and V dies (a guest comes back next to the host). When
+// everyone is down the server kills the host's V for real.
 
 public class CampaignNpc {
     public let id: EntityID;
@@ -77,6 +78,8 @@ public class CampaignCombat extends ScriptableSystem {
     public static func ReviveSeconds() -> Float = 4.0
     // Player health (percent) at which V is downed.
     public static func DownedHealth() -> Float = 1.0
+    // A downed player nobody revives dies after this long.
+    public static func BleedOutSeconds() -> Float = 45.0
 
     private let m_npcs: array<ref<CampaignNpc>>;
     private let m_proxies: array<ref<CampaignNpcProxy>>;
@@ -91,6 +94,8 @@ public class CampaignCombat extends ScriptableSystem {
     private let m_downedPuppets: array<Uint64>;
     private let m_reviveTarget: Uint64;
     private let m_reviveProgress: Float;
+    private let m_bleedOutLeft: Float;
+    private let m_bledOut: Bool;
 
     public static func Get() -> ref<CampaignCombat> {
         let container = GameInstance.GetScriptableSystemsContainer(GetGameInstance());
@@ -217,6 +222,7 @@ public class CampaignCombat extends ScriptableSystem {
             }
         }
         this.UpdateProtection();
+        this.UpdateBleedOut();
         this.UpdateRevive();
         GameInstance.GetDelaySystem(this.GetGameInstance()).DelayCallback(new CampaignCombatPoll(), CampaignCombat.PollSeconds(), false);
     }
@@ -586,18 +592,43 @@ public class CampaignCombat extends ScriptableSystem {
             return;
         }
         this.m_downed = true;
+        this.m_bledOut = false;
+        this.m_bleedOutLeft = CampaignCombat.BleedOutSeconds();
         GameInstance.GetGodModeSystem(this.GetGameInstance()).AddGodMode(player.GetEntityID(), gameGodModeType.Invulnerable, n"CampaignDowned");
         StatusEffectHelper.ApplyStatusEffect(player, t"GameplayRestriction.NoWeapons");
         StatusEffectHelper.ApplyStatusEffect(player, t"GameplayRestriction.ForceCrouch");
         StatusEffectHelper.ApplyStatusEffect(player, t"GameplayRestriction.NoJump");
+        StatusEffectHelper.ApplyStatusEffect(player, t"GameplayRestriction.NoMovement");
         CampaignServer.ReportDowned(true);
-        this.Message("You are down - a teammate has to come to you");
+        this.Message(s"You are down - a teammate can revive you (\(RoundF(this.m_bleedOutLeft)) s)");
         LogChannel(n"DEBUG", "[Campaign] downed");
+    }
+
+    // Nobody came in time: the host's V dies for real (death screen, the story reloads), a
+    // guest's game would load its own save and leave the story, so a guest is brought back
+    // next to the host instead (Respawn).
+    private func UpdateBleedOut() -> Void {
+        if !this.m_downed || this.m_bledOut {
+            return;
+        }
+        this.m_bleedOutLeft -= CampaignCombat.PollSeconds();
+        if this.m_bleedOutLeft > 0.0 {
+            this.Message(s"You are down - a teammate can revive you (\(RoundF(this.m_bleedOutLeft)) s)");
+            return;
+        }
+        this.m_bledOut = true;
+        CampaignServer.ReportBledOut();
+        if this.IsHost() {
+            this.Die();
+        } else {
+            this.Message("You bled out");
+        }
     }
 
     private func GetUp() -> Void {
         let player = this.Player();
         this.m_downed = false;
+        this.m_bledOut = false;
         if !IsDefined(player) {
             return;
         }
@@ -605,6 +636,19 @@ public class CampaignCombat extends ScriptableSystem {
         StatusEffectHelper.RemoveStatusEffect(player, t"GameplayRestriction.NoWeapons");
         StatusEffectHelper.RemoveStatusEffect(player, t"GameplayRestriction.ForceCrouch");
         StatusEffectHelper.RemoveStatusEffect(player, t"GameplayRestriction.NoJump");
+        StatusEffectHelper.RemoveStatusEffect(player, t"GameplayRestriction.NoMovement");
+    }
+
+    // A guest who bled out comes back next to the host.
+    public func OnRespawn(x: Float, y: Float, z: Float, health: Float) -> Void {
+        let player = this.Player();
+        this.GetUp();
+        if !IsDefined(player) {
+            return;
+        }
+        GameInstance.GetStatPoolsSystem(this.GetGameInstance()).RequestSettingStatPoolValue(Cast<StatsObjectID>(player.GetEntityID()), gamedataStatPoolType.Health, health, null, true);
+        GameInstance.GetTeleportationFacility(this.GetGameInstance()).Teleport(player, new Vector4(x + 1.5, y, z, 1.0), player.GetWorldOrientation().ToEulerAngles());
+        this.Message("You died - back next to the host");
     }
 
     public func OnRevived(health: Float) -> Void {
@@ -621,20 +665,38 @@ public class CampaignCombat extends ScriptableSystem {
 
     // Everyone is down: this (the host's) V dies for real and the game reloads.
     public func OnWipe() -> Void {
+        LogChannel(n"DEBUG", "[Campaign] everyone is down - V dies");
+        this.Die();
+    }
+
+    private func Die() -> Void {
         let player = this.Player();
         this.Unprotect();
         this.GetUp();
         if IsDefined(player) {
-            LogChannel(n"DEBUG", "[Campaign] everyone is down - V dies");
             GameInstance.GetStatPoolsSystem(this.GetGameInstance()).RequestSettingStatPoolMinValue(Cast<StatsObjectID>(player.GetEntityID()), gamedataStatPoolType.Health, player);
         }
     }
 
+    // A downed teammate's character falls the way companions (Jackie, Panam) do and waits for
+    // help; interpolation leaves it where it fell.
     public func OnPlayerDowned(puppetId: Uint64, downed: Bool) -> Void {
         ArrayRemove(this.m_downedPuppets, puppetId);
         if downed {
             ArrayPush(this.m_downedPuppets, puppetId);
             this.Message("A teammate is down - stand next to them to help");
+        }
+        let network = GameInstance.GetNetworkWorldSystem();
+        let id = network.GetEntityIdByServerId(puppetId);
+        let puppet = GameInstance.FindEntityByID(this.GetGameInstance(), id) as ScriptedPuppet;
+        if !IsDefined(puppet) {
+            return;
+        }
+        network.SetPuppetHeld(id, downed);
+        if downed {
+            StatusEffectHelper.ApplyStatusEffect(puppet, t"BaseStatusEffect.FollowerDefeatedStory");
+        } else {
+            StatusEffectHelper.RemoveStatusEffectsWithTag(puppet, n"FollowerDefeated");
         }
     }
 

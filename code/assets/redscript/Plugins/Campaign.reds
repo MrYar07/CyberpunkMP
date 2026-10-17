@@ -36,6 +36,7 @@ public native class CampaignServer extends ServerRpc {
     public static native func ReportNpcHits(entries: String) -> Void;
     public static native func ReportDowned(downed: Bool) -> Void;
     public static native func ReportRevive(puppetId: Uint64) -> Void;
+    public static native func ReportBledOut() -> Void;
 }
 
 // ClientRpc functions are invoked without an instance, so they only route to CampaignSync.
@@ -142,6 +143,13 @@ public class CampaignClient extends ClientRpc {
         let combat = CampaignCombat.Get();
         if IsDefined(combat) {
             combat.OnRevived(health);
+        }
+    }
+
+    public func Respawn(x: Float, y: Float, z: Float) -> Void {
+        let combat = CampaignCombat.Get();
+        if IsDefined(combat) {
+            combat.OnRespawn(x, y, z, 50.0);
         }
     }
 

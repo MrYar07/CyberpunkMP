@@ -25,6 +25,11 @@ namespace Cyberpunk.Rpc.Server.Plugins
         {
             CampaignSystem.Plugin.Instance.Session.Combat.ReportRevive(playerId, puppetId);
         }
+
+        public static partial void ReportBledOut_Impl(ulong playerId)
+        {
+            CampaignSystem.Plugin.Instance.Session.Combat.ReportBledOut(playerId);
+        }
     }
 }
 
@@ -39,7 +44,9 @@ namespace CampaignSystem
     // which the host's game applies.
     //
     // Players are not killed while someone else can help: at zero health they are downed, a
-    // teammate standing next to them revives them. When everyone in the world is down, the
+    // teammate standing next to them revives them. Nobody comes within the bleed-out time
+    // (client side, 45 s): the host's V dies for real, a guest is brought back next to the
+    // host (its own death would load its own save). When everyone in the world is down, the
     // host's V dies for real (the game's own death screen and reload) and the guests get up
     // once the host is back in the world.
     internal class CampaignCombat
@@ -177,6 +184,35 @@ namespace CampaignSystem
                 logger.Info($"Player {playerId} revived player {target}");
                 CampaignClient.Revived(target, ReviveHealth);
                 SetDowned(target, false, players);
+            }
+        }
+
+        internal void ReportBledOut(ulong playerId)
+        {
+            lock (sync)
+            {
+                var players = inWorld();
+                if (!downed.Contains(playerId))
+                    return;
+
+                SetDowned(playerId, false, players);
+                if (host() is not { } hostId || playerId == hostId)
+                {
+                    // The host's game kills its V itself; guests get up when it is back.
+                    logger.Info($"Player {playerId} bled out");
+                    return;
+                }
+
+                logger.Info($"Player {playerId} bled out, back next to the host");
+                if (hostInWorld() && Server.PlayerSystem.GetById(hostId) is { } hostPlayer)
+                {
+                    var position = hostPlayer.MovementComponent.Position;
+                    CampaignClient.Respawn(playerId, position.X, position.Y, position.Z);
+                }
+                else
+                {
+                    CampaignClient.Revived(playerId, ReviveHealth);
+                }
             }
         }
 

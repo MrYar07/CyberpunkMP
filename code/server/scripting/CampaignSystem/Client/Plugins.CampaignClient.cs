@@ -289,6 +289,21 @@ public static class CampaignClient
 		}
 	}
 
+	[ClientRpc(Class = 6609351954351555900, Function = 5573540597314772598)]
+	public static void Respawn(ulong playerId, float x, float y, float z)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteFloat(x);
+			data.WriteFloat(y);
+			data.WriteFloat(z);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 5573540597314772598, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
 	[ClientRpc(Class = 6609351954351555900, Function = 1384979802496007172)]
 	public static void CoopWipe(ulong playerId, int reason)
 	{
