@@ -28,6 +28,9 @@ public native class CampaignServer extends ServerRpc {
     public static native func ReportCharacterPart(key: String, value: String) -> Void;
     public static native func ReportCharacterDone() -> Void;
     public static native func RequestCharacter() -> Void;
+    public static native func ReportDialog(options: String, timed: Bool) -> Void;
+    public static native func ReportDialogClosed() -> Void;
+    public static native func ReportScene(tier: Int32, x: Float, y: Float, z: Float) -> Void;
 }
 
 // ClientRpc functions are invoked without an instance, so they only route to CampaignSync.
@@ -85,6 +88,13 @@ public class CampaignClient extends ClientRpc {
 
     public func CharacterDone(found: Bool) -> Void {
         CampaignLobby.Get().OnCharacterDone(found);
+    }
+
+    public func SceneState(tier: Int32, x: Float, y: Float, z: Float) -> Void {
+        let dialog = CampaignDialog.Get();
+        if IsDefined(dialog) {
+            dialog.OnSceneState(tier, x, y, z);
+        }
     }
 }
 

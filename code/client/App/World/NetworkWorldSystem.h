@@ -53,6 +53,10 @@ struct NetworkWorldSystem : RED4ext::IGameSystem, Core::HookingAgent, flecs::wor
     Red::CString GetUsername() const;
     Red::CString ExportCustomizationState() const;
     bool ImportCustomizationState(const Red::CString& aData) const;
+    // Campaign dialog votes (ChoiceInput).
+    void SetChoiceLock(bool aLocked);
+    int32_t TakeBlockedChoiceConfirms();
+    bool InjectChoice(int32_t aSteps);
     void OnConnected();
     void OnDisconnected(Client::EDisconnectReason);
 
@@ -93,6 +97,9 @@ RTTI_DEFINE_CLASS(NetworkWorldSystem, {
     RTTI_METHOD(GetUsername);
     RTTI_METHOD(ExportCustomizationState);
     RTTI_METHOD(ImportCustomizationState);
+    RTTI_METHOD(SetChoiceLock);
+    RTTI_METHOD(TakeBlockedChoiceConfirms);
+    RTTI_METHOD(InjectChoice);
     RTTI_METHOD(GetEntityIdByServerId);
     RTTI_METHOD(GetAppearanceSystem);
     RTTI_METHOD(GetInterpolationSystem);

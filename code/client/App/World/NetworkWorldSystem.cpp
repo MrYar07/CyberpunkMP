@@ -19,6 +19,7 @@
 #include "Game/CharacterCustomizationSystem.h"
 
 #include "ChatSystem.h"
+#include "ChoiceInput.h"
 
 static uint64_t GTick = 0;
 
@@ -178,6 +179,8 @@ void NetworkWorldSystem::Update(uint64_t aTick)
 
     const auto delta = std::min(aTick - m_lastTick, 1000ull);
     m_lastTick = aTick;
+
+    ChoiceInput::Update();
 
     const auto service = Core::Container::Get<NetworkService>();
     if (service && service->IsConnected())
@@ -452,6 +455,8 @@ void NetworkWorldSystem::OnInitialize(const RED4ext::JobHandle& aJob)
 
     m_vehicleSystem = RED4ext::MakeHandle<VehicleSystem>();
     m_vehicleSystem->OnInitialize(aJob);
+
+    ChoiceInput::Attach();
 }
 
 void NetworkWorldSystem::Connect()
@@ -474,6 +479,21 @@ bool NetworkWorldSystem::IsEnabled() const
 Red::TweakDBID NetworkWorldSystem::TweakDBIDFromNumber(uint64_t aValue) const
 {
     return Red::TweakDBID(aValue);
+}
+
+void NetworkWorldSystem::SetChoiceLock(bool aLocked)
+{
+    ChoiceInput::SetLock(aLocked);
+}
+
+int32_t NetworkWorldSystem::TakeBlockedChoiceConfirms()
+{
+    return ChoiceInput::TakeBlockedConfirms();
+}
+
+bool NetworkWorldSystem::InjectChoice(int32_t aSteps)
+{
+    return ChoiceInput::Inject(aSteps);
 }
 
 bool NetworkWorldSystem::IsConnected() const

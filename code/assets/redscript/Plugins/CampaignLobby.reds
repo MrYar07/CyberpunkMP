@@ -177,6 +177,15 @@ public class CampaignLobby extends ScriptableService {
     }
 
     public func OnVoteOpened(voteId: Uint32, kind: String, options: String, seconds: Int32) -> Void {
+        // Dialog votes happen in the world and belong to CampaignDialog.
+        if Equals(kind, "dialog") {
+            let dialog = CampaignDialog.Get();
+            if IsDefined(dialog) {
+                dialog.OnVoteOpened(voteId, options, seconds);
+            }
+            return;
+        }
+
         this.m_voteId = voteId;
         this.m_voteKind = kind;
         this.m_voteOptions = StrSplit(options, "|");
@@ -192,6 +201,11 @@ public class CampaignLobby extends ScriptableService {
     }
 
     public func OnVoteTally(voteId: Uint32, counts: String) -> Void {
+        let dialog = CampaignDialog.Get();
+        if IsDefined(dialog) && dialog.OwnsVote(voteId) {
+            dialog.OnVoteTally(voteId, counts);
+            return;
+        }
         if voteId != this.m_voteId {
             return;
         }
@@ -204,6 +218,11 @@ public class CampaignLobby extends ScriptableService {
     }
 
     public func OnVoteClosed(voteId: Uint32, winner: Int32) -> Void {
+        let dialog = CampaignDialog.Get();
+        if IsDefined(dialog) && dialog.OwnsVote(voteId) {
+            dialog.OnVoteClosed(voteId, winner);
+            return;
+        }
         if voteId != this.m_voteId {
             return;
         }

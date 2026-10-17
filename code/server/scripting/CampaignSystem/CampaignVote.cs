@@ -4,7 +4,8 @@ namespace CampaignSystem
 {
     // One vote among the connected players: every player has one vote and can change it until
     // the time runs out. Most votes wins; a tie is drawn at random among the tied options.
-    // With no votes at all, the fallback decides (the host's own choice, or a random option).
+    // With no votes at all, the fallback decides: an option, or -1 to leave it to the host's
+    // game (a dialog nobody voted on).
     // A vote can wait for its first ballot before the clock starts (the lifepath vote: players
     // reach that screen at their own pace).
     internal class CampaignVote
@@ -98,10 +99,24 @@ namespace CampaignSystem
             onClosed(winner);
         }
 
+        // The question went away (the dialog closed): no winner, nothing to apply.
+        internal void Cancel(IEnumerable<ulong> players)
+        {
+            if (Closed)
+                return;
+
+            Closed = true;
+            foreach (var id in players)
+                CampaignClient.VoteClosed(id, Id, -1);
+        }
+
         private int Winner()
         {
             if (votes.Count == 0)
-                return Math.Clamp(fallback(), 0, Options.Count - 1);
+            {
+                var choice = fallback();
+                return choice < 0 ? -1 : Math.Clamp(choice, 0, Options.Count - 1);
+            }
 
             var counts = Counts();
             var best = counts.Max();

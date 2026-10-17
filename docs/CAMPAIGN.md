@@ -50,6 +50,8 @@ podbierania pojedynczych poprawek.
 | Dziennik questów (questy, fazy, cele) | Host nasłuchuje `JournalManager` (`gameJournalListenerType.State`) i przy połączeniu wysyła pełny zrzut. Goście dostają `ChangeEntryStateByHash` z powiadomieniem. |
 | Fakty questów | Domyślna lista (16 164 faktów: 11 083 bazy, 5 081 Phantom Liberty) jest wbudowana w plugin. Host rejestruje `QuestsSystem.RegisterListener` dla każdego faktu i wysyła wartości różne od zera. Goście dostają `SetFactStr` — także zera, więc fakty, których host nie ma, są u gościa kasowane. |
 | Pozycja, wygląd, pojazdy | To, co już robi CyberpunkMP. |
+| Dialogi | Głosowanie wszystkich graczy w świecie, wybór robi gra hosta (niżej, „Dialogi i sceny”). |
+| Sceny | Host zgłasza poziom sceny (`GameplayTier`) i pozycję; goście daleko od hosta są do niego przenoszeni, w scenach kinowych stoją w miejscu. |
 
 ### Przebieg sesji
 
@@ -117,7 +119,7 @@ Zmiany lokalne na serwerze: `config/campaign_facts.txt` — `nazwa` dodaje fakt,
   ustawi, może ruszyć u gościa. Do sprawdzenia w fazie testowej.
 - Host rejestruje kilka tysięcy listenerów faktów naraz. Jeśli to okaże się za drogie,
   zamiennikiem jest natywny hook zapisu FactsDB (RED4ext).
-- NPC, walka, sceny i dialogi nie są synchronizowane.
+- NPC i walka nie są synchronizowane.
 
 ## Plan
 
@@ -128,9 +130,9 @@ Zmiany lokalne na serwerze: `config/campaign_facts.txt` — `nazwa` dodaje fakt,
 3. **Lobby, zapis kampanii i wspólny start** (zrobione): gracze zbierają się w lobby w
    menu głównym, host wybiera nową grę albo wczytanie kampanii, głosowanie nad ścieżką
    życia, goście startują w świecie bez questów, postacie gości w zapisie kampanii.
-4. **Sceny i dialogi**: przy starcie sceny u hosta goście są przenoszeni do niego i
-   oglądają. **O opcjach dialogowych gracze głosują** (zasady niżej), wynik wybiera gra
-   hosta.
+4. **Sceny i dialogi** (zrobione): przy starcie sceny u hosta goście są przenoszeni do
+   niego i oglądają. **O opcjach dialogowych gracze głosują** (zasady niżej), wynik
+   wybiera gra hosta.
 5. **NPC i walka**: AI liczona u hosta, klienci zgłaszają trafienia.
 6. **Przejście kampanii misja po misji**, potem Phantom Liberty. Łatki na sceny, które
    zakładają jednego V (Johnny, braindance, Songbird).
@@ -163,9 +165,46 @@ Zmiany lokalne na serwerze: `config/campaign_facts.txt` — `nazwa` dodaje fakt,
 - Opcje widoczne w głosowaniu to opcje dostępne dla postaci hosta (testy umiejętności,
   opcje ścieżki życia) — to jego gra prowadzi dialog. Rozszerzenie na później: opcja
   dostępna, jeśli spełnia ją którykolwiek gracz.
-- Do zbadania: jak gra hosta wybiera opcję bez wciśnięcia klawisza (`dialogUI.script`,
-  blackboard `UIInteractions`), a kreator — ścieżkę
-  (`characterCreationGenderBackstoryMenu.script`).
+- Wybór opcji w grze hosta i blokada klawisza: opis w „Dialogi i sceny”.
+
+## Dialogi i sceny (etap 4)
+
+Gra wybiera opcję dialogową natywnie, z wejścia gracza; skrypty nie mają do tego API.
+Dlatego klient (`code/client/App/World/ChoiceInput.cpp`) robi to tak jak gracz: hook na
+`Player::ProcessInput` (adres po hashu `3535541945` z biblioteki adresów gry) i
+syntetyczne naciśnięcia klawiszy. Technika i układ struktur z integracji Neuro z
+Cyberpunkiem (`VedalAI/neuro-cyberpunk`, biblioteka `alphanin9/SharedPunk`, MIT).
+
+Przebieg (`Plugins/CampaignDialog.reds`, serwer `CampaignSession.cs`):
+
+1. Gra hosta pokazuje aktywny dialog (blackboard `UIInteractions`: `DialogChoiceHubs`,
+   `ActiveChoiceHubID`). Host wysyła opcje `ReportDialog(opcje, naCzas)` — tekst opcji
+   rozdzielony `|`, `~` przed opcją niedostępną dla postaci hosta (Inactive/CheckFailed).
+   Zniknięcie dialogu: `ReportDialogClosed`.
+2. Jeśli w świecie są co najmniej 2 osoby, serwer otwiera głosowanie `dialog` (15 s, przy
+   dialogu na czas 5 s, żeby zdążyć przed zegarem gry). Sam host gra normalnie.
+3. U hosta `SetChoiceLock(true)`: naciśnięcia potwierdzenia (F, Enter, X/kwadrat na
+   padzie, lewy przycisk myszy) nie trafiają do gry, tylko są liczone — każde to głos hosta
+   na podświetloną opcję. Przewijanie działa normalnie. Przy opcjach liczba głosów `[2]`,
+   przy moim głosie `<` (owinięcie `dialogWidgetGameController.UpdateDialogsData`).
+4. Goście dostają te same opcje w oknie dialogu gry (własny hub `CO-OP VOTE` w blackboardzie
+   `UIInteractions`) i głosują zwykłymi klawiszami dialogu (`ChoiceScrollUp/Down`,
+   `ChoiceApply`).
+5. Koniec głosowania: host zdejmuje blokadę i, jeśli jest zwycięzca, wstrzykuje strzałki
+   góra/dół do zwycięskiej opcji i F (`InjectChoice`, 120 ms między klawiszami). Nikt nie
+   zagłosował → host wybiera sam.
+
+Sceny: owinięcie `PlayerPuppet.OnSceneTierChange` u hosta → `ReportScene(tier, x, y, z)` →
+serwer → `SceneState` u gości (także spóźnionych). Od `Tier3_LimitedGameplay` gość dalej
+niż 25 m jest przenoszony 1,5 m obok hosta, od `Tier4_FPPCinematic` dostaje
+`GameplayRestriction.NoMovement` do końca sceny. Telefony i holorozmowy dzwonią tylko u
+hosta, bo goście nie mają questów.
+
+Ograniczenia: wstrzykiwane są domyślne klawisze (strzałki, F), więc przy zmienionym
+przypisaniu `UI_MoveUp/Down` lub `DialogConfirm` na strzałki/F wybór nie zadziała; blokada
+zna tylko domyślne klawisze potwierdzenia. Goście widzą tekst opcji bez ikon testów
+umiejętności. Dialog, który po wyborze wraca z identycznymi opcjami bez zniknięcia, nie
+otwiera nowego głosowania (host wybiera wtedy sam).
 
 ## Budowanie
 

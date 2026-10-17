@@ -15,6 +15,11 @@ public native class NetworkWorldSystem extends IGameSystem {
     // Into the creator's current state: call InitializeState() before, FinalizeState() after.
     public native func ImportCustomizationState(data: String) -> Bool;
     public native func TweakDBIDFromNumber(value: Uint64) -> TweakDBID;
+    // Campaign dialog votes: hold back the host's confirm presses while the players vote,
+    // count them, then pick the winner by key presses (steps < 0 = up, then confirm).
+    public native func SetChoiceLock(locked: Bool) -> Void;
+    public native func TakeBlockedChoiceConfirms() -> Int32;
+    public native func InjectChoice(steps: Int32) -> Bool;
     public native func GetEntityIdByServerId(serverId: Uint64) -> EntityID;
     public native func GetAppearanceSystem() -> ref<AppearanceSystem>;
     public native func GetChatSystem() -> ref<ChatSystem>;

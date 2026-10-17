@@ -194,5 +194,21 @@ public static class CampaignClient
 		}
 	}
 
+	[ClientRpc(Class = 6609351954351555900, Function = 13803256882714520787)]
+	public static void SceneState(ulong playerId, int tier, float x, float y, float z)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteInt32(tier);
+			data.WriteFloat(x);
+			data.WriteFloat(y);
+			data.WriteFloat(z);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 13803256882714520787, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
 }
 }

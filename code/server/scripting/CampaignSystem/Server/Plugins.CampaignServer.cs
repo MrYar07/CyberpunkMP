@@ -167,5 +167,41 @@ public static partial class CampaignServer
 
 	public static partial void RequestCharacter_Impl(ulong playerId);
 
+	[ServerRpc(Class = 17961805562553929976, Function = 14366581367440459079)]
+	public static void ReportDialog(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+		var options = data.ReadString();
+		var timed = data.ReadBool();
+
+		ReportDialog_Impl(playerId, options, timed);
+	}
+
+	public static partial void ReportDialog_Impl(ulong playerId, string options, bool timed);
+
+	[ServerRpc(Class = 17961805562553929976, Function = 3394342308908131419)]
+	public static void ReportDialogClosed(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+
+		ReportDialogClosed_Impl(playerId);
+	}
+
+	public static partial void ReportDialogClosed_Impl(ulong playerId);
+
+	[ServerRpc(Class = 17961805562553929976, Function = 14992101388886561257)]
+	public static void ReportScene(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+		var tier = data.ReadInt32();
+		var x = data.ReadFloat();
+		var y = data.ReadFloat();
+		var z = data.ReadFloat();
+
+		ReportScene_Impl(playerId, tier, x, y, z);
+	}
+
+	public static partial void ReportScene_Impl(ulong playerId, int tier, float x, float y, float z);
+
 }
 }

@@ -62,8 +62,22 @@ namespace Cyberpunk.Rpc.Server.Plugins
 
         public static partial void CastVote_Impl(ulong playerId, uint voteId, int option)
         {
-            lock (CampaignSystem.CampaignSession.Sync)
-                CampaignSystem.Plugin.Instance.Session.Lobby.CastVote(playerId, voteId, option);
+            CampaignSystem.Plugin.Instance.Session.CastVote(playerId, voteId, option);
+        }
+
+        public static partial void ReportDialog_Impl(ulong playerId, string options, bool timed)
+        {
+            CampaignSystem.Plugin.Instance.Session.ReportDialog(playerId, options, timed);
+        }
+
+        public static partial void ReportDialogClosed_Impl(ulong playerId)
+        {
+            CampaignSystem.Plugin.Instance.Session.ReportDialogClosed(playerId);
+        }
+
+        public static partial void ReportScene_Impl(ulong playerId, int tier, float x, float y, float z)
+        {
+            CampaignSystem.Plugin.Instance.Session.ReportScene(playerId, tier, x, y, z);
         }
 
         public static partial void ReportCharacterPart_Impl(ulong playerId, string key, string value)
@@ -103,6 +117,11 @@ namespace CampaignSystem
         // 64 KB network buffer (strings are limited to 65535 bytes).
         private const int MaxBatchLength = 16000;
 
+        // Dialog votes. A timed dialog runs on the host's game clock, so its vote has to end
+        // well before the game picks for itself.
+        private const float DialogVoteSeconds = 15.0f;
+        private const float TimedDialogVoteSeconds = 5.0f;
+
         // RPC handlers and the lobby timer share this.
         internal static readonly object Sync = new();
 
@@ -122,6 +141,15 @@ namespace CampaignSystem
         // state, because anything missing would be read as "unset" and wipe their facts.
         private bool snapshotReady;
 
+        // The dialog the host's game is showing, while the players vote on it.
+        private CampaignVote? dialogVote;
+        private string? dialogOptions;
+
+        // The host's scene tier (GameplayTier: 1 = free gameplay ... 5 = cinematic) and where it
+        // plays, so guests can be brought over and held while it runs.
+        private int sceneTier;
+        private float sceneX, sceneY, sceneZ;
+
         internal CampaignSession()
         {
             watchedFacts = LoadFactList();
@@ -130,6 +158,7 @@ namespace CampaignSystem
 
             Server.PlayerSystem.PlayerJoinEvent += OnPlayerJoin;
             Server.PlayerSystem.PlayerLeftEvent += OnPlayerLeft;
+            Server.Timer.Add(Tick, 0.25f);
 
             logger.Info($"Campaign co-op ready, watching {watchedFacts.Count} quest fact(s)");
         }
@@ -160,6 +189,8 @@ namespace CampaignSystem
             hostId = playerId;
             hostInWorld = false;
             snapshotReady = false;
+            CancelDialogVote();
+            SetScene(0, 0, 0, 0);
 
             // The new host may already be in the world (the old host left mid-game).
             if (playerId is { } id && Lobby.Find(id) is { InWorld: true })
@@ -187,6 +218,8 @@ namespace CampaignSystem
                     logger.Info("The host left the world, the story is paused until they are back");
                     hostInWorld = false;
                     snapshotReady = false;
+                    CancelDialogVote();
+                    SetScene(0, 0, 0, 0);
                 }
             }
         }
@@ -209,6 +242,13 @@ namespace CampaignSystem
 
             logger.Info($"Player {playerId} entered the world as a guest");
             SendState(playerId);
+
+            if (sceneTier > 0)
+                CampaignClient.SceneState(playerId, sceneTier, sceneX, sceneY, sceneZ);
+
+            // A guest walking into a running dialog vote can still have a say.
+            if (dialogVote is { Closed: false })
+                dialogVote.OpenFor(playerId);
         }
 
         private void PromoteToHost(ulong playerId)
@@ -327,6 +367,108 @@ namespace CampaignSystem
                 foreach (var id in guests)
                     SendState(id);
             }
+        }
+
+        // ---- votes, dialogs and scenes ----
+
+        internal void CastVote(ulong playerId, uint voteId, int option)
+        {
+            lock (sync)
+            {
+                if (dialogVote is not null && dialogVote.Id == voteId)
+                {
+                    if (Lobby.Find(playerId) is { InWorld: true })
+                        dialogVote.Cast(playerId, option, Voters());
+                    return;
+                }
+
+                Lobby.CastVote(playerId, voteId, option);
+            }
+        }
+
+        // The host's game shows dialog options ("|"-separated, "~" in front of one the host's
+        // character cannot pick). Everyone in the world votes; the host's game applies the
+        // winner. Alone in the world, the host just plays.
+        internal void ReportDialog(ulong playerId, string options, bool timed)
+        {
+            lock (sync)
+            {
+                if (playerId != hostId || !hostInWorld)
+                    return;
+
+                if (dialogVote is { Closed: false } && dialogOptions == options)
+                    return;
+
+                CancelDialogVote();
+
+                var voters = Voters();
+                if (voters.Count < 2)
+                    return;
+
+                var list = options.Split('|');
+                dialogOptions = options;
+                dialogVote = new CampaignVote("dialog", list, timed ? TimedDialogVoteSeconds : DialogVoteSeconds,
+                    () => -1,
+                    winner => logger.Info(winner < 0
+                        ? "Dialog vote: no votes, the host picks"
+                        : $"Dialog vote: option {winner + 1} of {list.Length}"));
+                dialogVote.Open(voters);
+            }
+        }
+
+        internal void ReportDialogClosed(ulong playerId)
+        {
+            lock (sync)
+            {
+                if (playerId == hostId)
+                    CancelDialogVote();
+            }
+        }
+
+        private void CancelDialogVote()
+        {
+            if (dialogVote is { Closed: false })
+                dialogVote.Cancel(Voters());
+
+            dialogVote = null;
+            dialogOptions = null;
+        }
+
+        internal void ReportScene(ulong playerId, int tier, float x, float y, float z)
+        {
+            lock (sync)
+            {
+                if (playerId == hostId && hostInWorld)
+                    SetScene(tier, x, y, z);
+            }
+        }
+
+        private void SetScene(int tier, float x, float y, float z)
+        {
+            var changed = tier != sceneTier;
+            sceneTier = tier;
+            (sceneX, sceneY, sceneZ) = (x, y, z);
+
+            if (changed)
+                logger.Info($"Host scene tier {tier}");
+
+            foreach (var id in Guests())
+                CampaignClient.SceneState(id, tier, x, y, z);
+        }
+
+        private void Tick(float delta)
+        {
+            lock (sync)
+            {
+                if (dialogVote is { Closed: false })
+                    dialogVote.Tick(delta, Voters());
+            }
+        }
+
+        // Everyone whose world is up, host included.
+        private List<ulong> Voters()
+        {
+            return Lobby.PlayerIds.Where(id => Lobby.Find(id) is { InWorld: true }).ToList();
         }
 
         // Guests whose world is up; the rest get the full state when they enter it.
