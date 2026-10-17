@@ -117,14 +117,17 @@ public class CampaignExtras extends ScriptableSystem {
             return;
         }
         this.m_active = false;
-        this.m_endedKey = this.m_sceneKey;
+        // The raw key: a scene that was already stale stays stale for the next one.
+        let network = GameInstance.GetNetworkWorldSystem();
+        if IsDefined(network) {
+            this.m_endedKey = network.GetSceneKey();
+        }
         this.m_sceneKey = "";
         this.ReleaseAll();
         this.m_mode = 0;
         this.m_speaker = null;
         this.m_anchored = false;
         ArrayClear(this.m_spots);
-        let network = GameInstance.GetNetworkWorldSystem();
         if IsDefined(network) {
             network.SetVehicleSyncPaused(false);
         }

@@ -135,8 +135,12 @@ struct PendingNode
     QuestNodeID node;
     uint64_t socket;
     Red::SharedPtr<Red::ResourceToken<Red::graph::GraphResource>> token;
+    std::chrono::steady_clock::time_point queued;
 };
 std::deque<PendingNode> s_pending;
+// A resource that neither loads nor fails within this time is given up on: the queue runs in
+// order, and one stuck entry would hold back every scene after it.
+constexpr auto kLoadTimeout = std::chrono::seconds(30);
 
 void ResolveClasses()
 {
@@ -408,6 +412,7 @@ void QuestMirror::Replay(const Red::CString& aEntries)
         if (ParseEntry(entries.substr(start, end - start), pending))
         {
             pending.token = Red::ResourceLoader::Get()->LoadAsync<Red::graph::GraphResource>(Red::ResourcePath(pending.resource));
+            pending.queued = std::chrono::steady_clock::now();
             s_pending.push_back(std::move(pending));
         }
         else
@@ -440,7 +445,13 @@ void QuestMirror::Update()
                 continue;
             }
             if (!front.token->IsLoaded())
-                return;
+            {
+                if (std::chrono::steady_clock::now() - front.queued < kLoadTimeout)
+                    return;
+                spdlog::warn("[QuestMirror] resource {} did not load in time, node {} skipped", front.resource, front.node);
+                s_pending.pop_front();
+                continue;
+            }
 
             pending = std::move(front);
             s_pending.pop_front();

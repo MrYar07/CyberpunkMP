@@ -94,6 +94,11 @@ public class CampaignDialog extends ScriptableSystem {
         this.Release();
     }
 
+    // No saving while held during the host's scene (the save would keep the hold).
+    private func IsSavingLocked() -> Bool {
+        return this.m_held;
+    }
+
     private func Interactions() -> ref<IBlackboard> {
         return GameInstance.GetBlackboardSystem(this.GetGameInstance()).Get(GetAllBlackboardDefs().UIInteractions);
     }

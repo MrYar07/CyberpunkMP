@@ -91,6 +91,8 @@ public class CampaignCombat extends ScriptableSystem {
     private let m_unboundSince: array<Float>;
     // This V is dying for real (bled out as host, or a wipe): no protection any more.
     private let m_dying: Bool;
+    // Leftovers of our god modes cleared once this world has a player (see ClearLeftovers).
+    private let m_cleared: Bool;
     private let m_polling: Bool;
     private let m_lastFull: Float;
 
@@ -124,6 +126,11 @@ public class CampaignCombat extends ScriptableSystem {
         ArrayClear(this.m_downedPuppets);
         this.m_downed = false;
         this.m_polling = false;
+    }
+
+    // No saving while downed: the save would keep the restrictions with nothing to lift them.
+    private func IsSavingLocked() -> Bool {
+        return this.m_downed;
     }
 
     private func Now() -> Float {
@@ -215,12 +222,27 @@ public class CampaignCombat extends ScriptableSystem {
         return RoundF(GameInstance.GetStatPoolsSystem(this.GetGameInstance()).GetStatPoolValue(Cast<StatsObjectID>(id), gamedataStatPoolType.Health, true) * 10.0);
     }
 
+    // A world loaded from a save may carry god modes the campaign put on V; nothing here owns
+    // them any more. Only our own sources are removed - the game's stay.
+    private func ClearLeftovers() -> Void {
+        let player = this.Player();
+        if this.m_cleared || !IsDefined(player) {
+            return;
+        }
+        this.m_cleared = true;
+        let id = player.GetEntityID();
+        let godModes = GameInstance.GetGodModeSystem(this.GetGameInstance());
+        godModes.RemoveGodMode(id, gameGodModeType.Immortal, n"CampaignCoop");
+        godModes.RemoveGodMode(id, gameGodModeType.Invulnerable, n"CampaignDowned");
+    }
+
     // ---- poll ----
 
     public func OnPoll() -> Void {
         if !this.m_polling {
             return;
         }
+        this.ClearLeftovers();
         if this.IsHost() {
             this.ReportNpcs();
         } else {
@@ -574,6 +596,8 @@ public class CampaignCombat extends ScriptableSystem {
 
     // Immortal while someone else is in the world; the health listener notices zero health.
     private func UpdateProtection() -> Void {
+        // Before protecting: clearing leftovers afterwards would take our own protection away.
+        this.ClearLeftovers();
         let player = this.Player();
         let wanted = this.m_coopPlayers >= 2 && IsDefined(player) && !player.IsDead() && !this.m_dying;
         if wanted && this.m_protected && this.m_protectedId != player.GetEntityID() {

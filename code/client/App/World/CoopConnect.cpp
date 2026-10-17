@@ -199,6 +199,10 @@ void ConnectTo(const PendingJoin& aJoin)
     std::string address;
     uint16_t port;
 
+    // Joining elsewhere: an old hosting problem is no longer news.
+    if (!s_hosting)
+        s_hostStatus.clear();
+
     if (aJoin.steamHost && *aJoin.steamHost != 0)
     {
         if (service->IsConnected() && SteamTunnel::ClientHost() == *aJoin.steamHost)
@@ -255,6 +259,20 @@ void UpdatePresence(bool aConnected)
 // The host's game reaches its own server once it is up (it takes a few seconds to start).
 void UpdateHosting(bool aConnected)
 {
+    // The server this game started went down while in use (crash, killed): say so.
+    if (s_hosting && !s_hostConnecting)
+    {
+        static auto s_nextCheck = std::chrono::steady_clock::time_point{};
+        const auto now = std::chrono::steady_clock::now();
+        if (now >= s_nextCheck)
+        {
+            s_nextCheck = now + std::chrono::seconds(1);
+            if (!ServerHost::IsRunning() && s_hostStatus.find("stopped") == std::string::npos)
+                s_hostStatus = ServerHost::Problem().c_str();
+        }
+        return;
+    }
+
     if (!s_hostConnecting)
         return;
 
@@ -401,7 +419,7 @@ void CoopConnect::Leave()
     s_hosting = false;
     s_hostConnecting = false;
     s_hostStatus.clear();
-    Settings::Get().steamHost = 0;
+    // The Steam host stays: JOIN SERVER goes back to the same game.
 }
 
 Red::CString CoopConnect::OpenInviteDialog()

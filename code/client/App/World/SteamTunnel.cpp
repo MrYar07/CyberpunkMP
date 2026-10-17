@@ -4,6 +4,11 @@
 
 #include <WinSock2.h>
 #include <WS2tcpip.h>
+#include <mstcpip.h>
+
+#ifndef SIO_UDP_CONNRESET
+#define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR, 12)
+#endif
 
 namespace
 {
@@ -98,6 +103,12 @@ SOCKET OpenLoopbackSocket()
         closesocket(sock);
         return INVALID_SOCKET;
     }
+
+    // Windows reports an ICMP "port unreachable" (the server not up yet, the game gone) as an
+    // error on the next receive; for a relay that is only noise.
+    BOOL reportResets = FALSE;
+    DWORD returned = 0;
+    WSAIoctl(sock, SIO_UDP_CONNRESET, &reportResets, sizeof(reportResets), nullptr, 0, &returned, nullptr, nullptr);
     return sock;
 }
 

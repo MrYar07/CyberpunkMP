@@ -86,16 +86,33 @@ bool ServerHost::Start()
     SetEnvironmentVariableW(L"CYBERPUNKMP_ADMIN_USERNAME", L"coop");
     SetEnvironmentVariableW(L"CYBERPUNKMP_ADMIN_PASSWORD", password.c_str());
 
-    STARTUPINFOW startup{sizeof(startup)};
-    startup.dwFlags = STARTF_USESTDHANDLES;
-    startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-    startup.hStdOutput = log;
-    startup.hStdError = log;
+    // Only the log is handed down, not every inheritable handle the game has open.
+    const bool hasLog = log != INVALID_HANDLE_VALUE;
+    HANDLE inherited[] = {log};
+    SIZE_T attributesSize = 0;
+    InitializeProcThreadAttributeList(nullptr, 1, 0, &attributesSize);
+    std::vector<uint8_t> attributes(attributesSize);
+    auto* pAttributes = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attributes.data());
+    const bool hasList = hasLog && InitializeProcThreadAttributeList(pAttributes, 1, 0, &attributesSize) &&
+                         UpdateProcThreadAttribute(pAttributes, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inherited, sizeof(inherited), nullptr, nullptr);
+
+    STARTUPINFOEXW startup{};
+    startup.StartupInfo.cb = sizeof(startup);
+    if (hasList)
+    {
+        startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+        startup.StartupInfo.hStdOutput = log;
+        startup.StartupInfo.hStdError = log;
+        startup.lpAttributeList = pAttributes;
+    }
 
     PROCESS_INFORMATION process{};
     std::wstring commandLine = L"\"" + exe.wstring() + L"\"";
-    const auto started = CreateProcessW(exe.c_str(), commandLine.data(), nullptr, nullptr, TRUE,
-                                        CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, folder.c_str(), &startup, &process);
+    const auto started = CreateProcessW(exe.c_str(), commandLine.data(), nullptr, nullptr, hasList,
+                                        CREATE_NO_WINDOW | CREATE_SUSPENDED | (hasList ? EXTENDED_STARTUPINFO_PRESENT : 0), nullptr,
+                                        folder.c_str(), &startup.StartupInfo, &process);
+    if (hasList)
+        DeleteProcThreadAttributeList(pAttributes);
 
     SetEnvironmentVariableW(L"CYBERPUNKMP_ADMIN_USERNAME", nullptr);
     SetEnvironmentVariableW(L"CYBERPUNKMP_ADMIN_PASSWORD", nullptr);

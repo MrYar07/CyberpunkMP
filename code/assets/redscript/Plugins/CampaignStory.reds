@@ -47,6 +47,7 @@ public class CampaignStory extends ScriptableSystem {
 
     private let m_hostMode: Int32;
     private let m_held: Bool;
+    private let m_cleared: Bool;
 
     private let m_scenes: array<ref<CampaignScenePoses>>;
 
@@ -70,6 +71,11 @@ public class CampaignStory extends ScriptableSystem {
         this.m_hostMode = 0;
     }
 
+    // No saving while held for the host's braindance (the save would keep the hold).
+    private func IsSavingLocked() -> Bool {
+        return this.m_held;
+    }
+
     private func Player() -> ref<PlayerPuppet> {
         return GameInstance.GetPlayerSystem(this.GetGameInstance()).GetLocalPlayerMainGameObject() as PlayerPuppet;
     }
@@ -87,6 +93,9 @@ public class CampaignStory extends ScriptableSystem {
     public func OnPoll() -> Void {
         if !this.m_polling {
             return;
+        }
+        if !this.m_held {
+            this.ClearLeftovers();
         }
         if this.IsHost() {
             this.CheckHost();
@@ -148,7 +157,18 @@ public class CampaignStory extends ScriptableSystem {
         }
     }
 
+    // A world loaded from a save may carry this hold's god mode; cleared before the first use.
+    private func ClearLeftovers() -> Void {
+        let player = this.Player();
+        if this.m_cleared || !IsDefined(player) {
+            return;
+        }
+        this.m_cleared = true;
+        GameInstance.GetGodModeSystem(this.GetGameInstance()).RemoveGodMode(player.GetEntityID(), gameGodModeType.Invulnerable, n"CampaignHostMode");
+    }
+
     private func Hold() -> Void {
+        this.ClearLeftovers();
         let player = this.Player();
         if this.m_held || !IsDefined(player) {
             return;

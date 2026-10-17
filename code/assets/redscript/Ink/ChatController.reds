@@ -121,13 +121,14 @@ public class ChatController extends inkHUDGameController {
         this.UpdateInputHints();
     }
 
-    // Chat commands ("/...") are handed to these scriptable systems as a ChatCommandRequest
-    // instead of being sent (plugins handle them in OnChatCommandRequest).
+    // Campaign co-op commands ("/coop ...") are handed to these scriptable systems as a
+    // ChatCommandRequest instead of being sent (plugins handle them in OnChatCommandRequest).
+    // Anything else, "/" or not, is chat as before.
     public static func CommandSystems() -> array<CName> = [n"CyberpunkMP.Plugins.CampaignStory"]
 
     private final func SendChat() -> Void {
         let textEntered: String = this.m_input.GetText();
-        if StrBeginsWith(textEntered, "/") {
+        if StrBeginsWith(textEntered, "/coop") {
             let container = GameInstance.GetScriptableSystemsContainer(GetGameInstance());
             for name in ChatController.CommandSystems() {
                 let system = container.Get(name);
