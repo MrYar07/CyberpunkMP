@@ -41,7 +41,10 @@ struct NetworkWorldSystem : RED4ext::IGameSystem, Core::HookingAgent, flecs::wor
 
     void Connect();
     void Disconnect();
-    bool IsReady() const { return m_ready; }
+    // The main menu is a world with a player too; only the game proper counts as in game.
+    // Script sets this from Codeware's Session/Ready (not pre-game) and clears it on end.
+    bool IsInGame() const { return m_ready && m_inGame; }
+    void SetInGame(bool aInGame) { m_inGame = aInGame; }
 
     // Script helpers for the campaign lobby, which runs at the main menu.
     bool IsEnabled() const;
@@ -66,6 +69,7 @@ protected:
 
 private:
     bool m_ready{false};
+    bool m_inGame{false};
     Red::CBaseFunction* m_pCreatePuppet;
     Red::CBaseFunction* m_pDeletePuppet;
     std::optional<uint64_t> m_remotePlayerId;
@@ -83,6 +87,7 @@ RTTI_DEFINE_CLASS(NetworkWorldSystem, {
     RTTI_METHOD(Connect);
     RTTI_METHOD(Disconnect);
     RTTI_METHOD(IsEnabled);
+    RTTI_METHOD(SetInGame);
     RTTI_METHOD(IsConnected);
     RTTI_METHOD(TweakDBIDFromNumber);
     RTTI_METHOD(GetUsername);

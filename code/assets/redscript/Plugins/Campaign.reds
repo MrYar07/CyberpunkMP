@@ -157,7 +157,6 @@ public class CampaignFactWatcher extends IScriptable {
 }
 
 public class CampaignSync extends ScriptableSystem {
-    private let m_inWorld: Bool;
     private let m_isHost: Bool;
     private let m_hasRole: Bool;
     private let m_journalListening: Bool;
@@ -173,21 +172,6 @@ public class CampaignSync extends ScriptableSystem {
         this.StopJournalListening();
         this.ClearWatchers();
         this.m_hasRole = false;
-
-        if this.m_inWorld {
-            this.m_inWorld = false;
-            CampaignLobby.Get().OnWorldGone();
-        }
-    }
-
-    // The story is only synced once the world is up; the server waits for this.
-    private func OnPlayerAttach(request: ref<PlayerAttachRequest>) -> Void {
-        this.m_inWorld = true;
-        CampaignLobby.Get().OnWorldReady(this.GetGameInstance());
-    }
-
-    public func IsInWorld() -> Bool {
-        return this.m_inWorld;
     }
 
     public func IsHost() -> Bool {

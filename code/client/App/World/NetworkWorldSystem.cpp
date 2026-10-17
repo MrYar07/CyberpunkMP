@@ -209,6 +209,7 @@ void NetworkWorldSystem::OnAfterWorldDetach()
     }
     spdlog::info("[NetworkWorldSystem] OnAfterWorldDetach");
     m_ready = false;
+    m_inGame = false;
 
     m_interpolationSystem->OnAfterWorldDetach();
     m_chatSystem->OnAfterWorldDetach();

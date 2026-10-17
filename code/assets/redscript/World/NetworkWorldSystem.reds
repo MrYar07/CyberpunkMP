@@ -7,6 +7,7 @@ public native class NetworkWorldSystem extends IGameSystem {
     public native func Connect() -> Void;
     public native func Disconnect() -> Void;
     public native func IsEnabled() -> Bool;
+    public native func SetInGame(inGame: Bool) -> Void;
     public native func IsConnected() -> Bool;
     public native func GetUsername() -> String;
     // Character creator state as base64; empty when no creator state exists.

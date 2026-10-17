@@ -276,6 +276,11 @@ namespace CampaignSystem
                 return;
 
             player.InWorld = inWorld;
+
+            // Counted as started only once actually in the game, not when told to start.
+            if (inWorld && phase == LobbyPhase.Started)
+                begun.Add(player.Name);
+
             Broadcast();
         }
 
@@ -329,7 +334,6 @@ namespace CampaignSystem
             // A host coming back loads their save; a new campaign's host starts the prologue.
             // Guests ask for their saved character either way and make one if there is none.
             var startMode = mode == LobbyMode.NewGame && !begun.Contains(player.Name) ? LobbyMode.NewGame : LobbyMode.LoadGame;
-            begun.Add(player.Name);
 
             CampaignClient.LobbyBegin(playerId, (int)startMode, campaign.LifePath, playerId == HostId);
         }

@@ -103,7 +103,7 @@ void NetworkService::TrySpawnCharacter()
         return;
 
     const auto pWorldSystem = Red::GetGameSystem<NetworkWorldSystem>();
-    if (!pWorldSystem || !pWorldSystem->IsReady())
+    if (!pWorldSystem || !pWorldSystem->IsInGame())
         return;
 
     const auto system = Red::GetGameSystem<Game::PlayerSystem>();

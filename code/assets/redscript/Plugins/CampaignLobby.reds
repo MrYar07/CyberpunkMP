@@ -90,6 +90,25 @@ public class CampaignLobby extends ScriptableService {
 
     private cb func OnLoad() {
         this.m_myVote = -1;
+
+        // The main menu is a world too, with a player in it: only a session that is not
+        // "pre-game" is the actual game.
+        let callbacks = GameInstance.GetCallbackSystem();
+        callbacks.RegisterCallback(n"Session/Ready", this, n"OnSessionReady");
+        callbacks.RegisterCallback(n"Session/BeforeEnd", this, n"OnSessionEnd");
+    }
+
+    private cb func OnSessionReady(event: ref<GameSessionEvent>) {
+        if event.IsPreGame() {
+            return;
+        }
+        this.OnWorldReady(GetGameInstance());
+    }
+
+    private cb func OnSessionEnd(event: ref<GameSessionEvent>) {
+        if this.m_inWorld {
+            this.OnWorldGone();
+        }
     }
 
     // ---- server messages ----
@@ -293,6 +312,11 @@ public class CampaignLobby extends ScriptableService {
     // Back at the menu during a running campaign: the host loads their save, a guest gets
     // their character back.
     public func Resume() -> Void {
+        // A start the server already sent that never ran: run that one.
+        if this.m_beginPending {
+            this.RunPendingBegin();
+            return;
+        }
         this.m_beginMode = 2;
         this.m_beginIsHost = this.IsHost();
         this.m_beginPending = true;
@@ -451,6 +475,11 @@ public class CampaignLobby extends ScriptableService {
 
     public func OnWorldReady(game: GameInstance) -> Void {
         this.m_inWorld = true;
+        // Lets the client spawn our character on the server (not from the main menu).
+        let network = GameInstance.GetNetworkWorldSystem();
+        if IsDefined(network) {
+            network.SetInGame(true);
+        }
         this.m_creating = false;
         this.m_menu = null;
 
@@ -480,6 +509,10 @@ public class CampaignLobby extends ScriptableService {
         this.m_inWorld = false;
         this.m_worldReported = false;
         this.m_reportArmed = false;
+        let network = GameInstance.GetNetworkWorldSystem();
+        if IsDefined(network) {
+            network.SetInGame(false);
+        }
     }
 
     private func ReportWorld() -> Void {
