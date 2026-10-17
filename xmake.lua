@@ -23,6 +23,12 @@ add_requires(
     "entt",
     "microsoft-gsl")
 
+-- gamenetworkingsockets requires protobuf (and abseil) itself; left free those resolve to
+-- newer versions than ours and the link ends with unresolved absl/protobuf symbols. Force
+-- one version of each across the whole tree (from Night City Online's xmake.lua).
+add_requireconfs("**.protobuf-cpp", { version = "29.3", override = true })
+add_requireconfs("**.abseil", { version = "20250127.0", override = true })
+
 if is_plat("windows") then
     set_arch("x64")
     add_cxflags("/bigobj")

@@ -60,19 +60,19 @@ internal class Program
 {
     private static string GetGitRoot()
     {
-        string gitFolderPath = LibGit2Sharp.Repository.Discover(Directory.GetCurrentDirectory());
-        if (gitFolderPath == null)
-            throw new Exception("This code should be ran from a Git repository!");
+        // Walk up to the directory holding .git. In a git worktree .git is a file pointing at
+        // the main checkout, and Repository.Discover would resolve to that other checkout.
+        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (directory != null)
+        {
+            string dotGit = Path.Combine(directory.FullName, ".git");
+            if (Directory.Exists(dotGit) || File.Exists(dotGit))
+                return directory.FullName + Path.DirectorySeparatorChar;
 
-        // Normalize directory separators to match the current environment
-        gitFolderPath = gitFolderPath.Replace('/', Path.DirectorySeparatorChar)
-                                     .Replace('\\', Path.DirectorySeparatorChar);
+            directory = directory.Parent;
+        }
 
-        // Remove the .git part from the path
-        string repositoryRoot = gitFolderPath.TrimEnd(Path.DirectorySeparatorChar)
-                                             .Remove(gitFolderPath.LastIndexOf(".git", StringComparison.Ordinal));
-
-        return repositoryRoot;
+        throw new Exception("This code should be ran from a Git repository!");
     }
 
     private static void Main(string[] args)

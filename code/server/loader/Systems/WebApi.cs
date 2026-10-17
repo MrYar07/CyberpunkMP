@@ -41,7 +41,15 @@ namespace Server.Loader.Systems
 
         private WebServer CreateWebServer(string url)
         {
-            Logger.UnregisterLogger<ConsoleLogger>();
+            // Swan only registers its console logger when a console is attached; unregistering
+            // it throws when the server runs with redirected output.
+            try
+            {
+                Logger.UnregisterLogger<ConsoleLogger>();
+            }
+            catch (InvalidOperationException)
+            {
+            }
 
             var server = new WebServer(o => o
                 .WithUrlPrefix(url)
