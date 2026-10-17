@@ -26,6 +26,9 @@ message NotifyCharacterLoad {
     bool is_player = 4;
     repeated string equipment = 5;
     bytes ccstate = 6;
+
+    // Who this is, for the name over the character's head and the scanner (from NCO).
+    string username = 7;
 }
 
 message NotifyVehicleLoad {

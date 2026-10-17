@@ -37,6 +37,19 @@ if (-not $ServerOnly) {
         New-Item -ItemType Directory -Force (Split-Path $target) | Out-Null
         Copy-Item $_.FullName $target -Force
     }
+
+    # Tweaks (records, nameplates), archives (UI, the guest start) and input bindings.
+    $assets = Join-Path $repo "code\assets"
+    $copies = @(
+        @{ From = Join-Path $assets "Tweaks"; Filter = "*.tweak"; To = "assets\Tweaks" },
+        @{ From = Join-Path $assets "Archives\packed\archive\pc\mod"; Filter = "*.archive"; To = "assets\Archives" },
+        @{ From = Join-Path $assets "Inputs"; Filter = "*.xml"; To = "assets\Inputs" }
+    )
+    foreach ($copy in $copies) {
+        $target = Join-Path $ModFolder $copy.To
+        New-Item -ItemType Directory -Force $target | Out-Null
+        Get-ChildItem $copy.From -Filter $copy.Filter -File | ForEach-Object { Copy-Item $_.FullName $target -Force }
+    }
 }
 
 # The server: everything the release folder holds for it, without build leftovers, the

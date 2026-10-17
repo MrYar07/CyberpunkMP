@@ -66,6 +66,11 @@ Character.Muppet : Character.TPP_Player {
 }
 
 Character.MaMuppet : Character.Panam {
+	// Blank: the record inherits Panam's name, and the nameplate reads the record's name
+	// before the entity's - this lets the player's name (AppearanceSystem) show (from NCO).
+	displayName = "";
+	fullDisplayName = "";
+	alternativeDisplayName = "";
 	appearanceName = "TPP_Body";
 	priority = "SpawnableObjectPriority.Regular";
 	reactionPreset = "ReactionPresets.NoReaction";
@@ -87,6 +92,11 @@ Character.MaMuppet : Character.Panam {
 }
 
 Character.WaMuppet : Character.Panam {
+	// Blank: the record inherits Panam's name, and the nameplate reads the record's name
+	// before the entity's - this lets the player's name (AppearanceSystem) show (from NCO).
+	displayName = "";
+	fullDisplayName = "";
+	alternativeDisplayName = "";
 	appearanceName = "TPP_Body";
 	// appearanceName = "panam_nude";
 	priority = "SpawnableObjectPriority.Regular";

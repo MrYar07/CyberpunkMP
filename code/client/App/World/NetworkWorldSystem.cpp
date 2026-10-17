@@ -35,7 +35,7 @@ NetworkWorldSystem::NetworkWorldSystem()
     set_entity_range(10'000'000, 20'000'000);
 }
 
-bool NetworkWorldSystem::Spawn(uint64_t aServerId, const Red::Vector4& aPosition, const Red::Quaternion& aRotation, const Red::DynArray<Red::TweakDBID>& aEquipment, const Vector<uint8_t> aCcstate)
+bool NetworkWorldSystem::Spawn(uint64_t aServerId, const Red::Vector4& aPosition, const Red::Quaternion& aRotation, const Red::DynArray<Red::TweakDBID>& aEquipment, const Vector<uint8_t> aCcstate, const std::string& acUsername)
 {
     if (!m_ready)
         return false;
@@ -85,6 +85,8 @@ bool NetworkWorldSystem::Spawn(uint64_t aServerId, const Red::Vector4& aPosition
 
     auto apprSystem = Red::GetGameSystem<NetworkWorldSystem>()->GetAppearanceSystem();
     apprSystem->AddEntity(id, aEquipment, aCcstate);
+    // Before ApplyAppearance, which reads it for the nameplate.
+    apprSystem->SetEntityName(id, acUsername);
 
     if (!id.IsDynamic())
         return false;
@@ -266,7 +268,7 @@ void NetworkWorldSystem::HandleCharacterLoad(const PacketEvent<server::NotifyCha
 
     auto ccstate = aMessage.get_ccstate();
 
-    Spawn(aMessage.get_id(), position, rotation, equipment, ccstate);
+    Spawn(aMessage.get_id(), position, rotation, equipment, ccstate, aMessage.get_username().c_str());
 }
 
 void NetworkWorldSystem::HandleEntityUnload(const PacketEvent<server::NotifyEntityUnload>& aMessage)
@@ -379,7 +381,28 @@ void NetworkWorldSystem::UpdatePlayerLocation() const
         // worldTransform on the next line - use it for position too.
         const auto cEntityPosition = puppet->placedComponent->worldTransform.Position;
         const auto cEntityRotation = eulerAngles(Game::ToGlm(puppet->placedComponent->worldTransform.Orientation));
-        float speed = puppet->moveComponent->speed.Magnitude();
+
+        // Speed is measured from how far V moved (from NCO): moveComponent->speed sits at a
+        // hand-mapped offset that moved on 2.31 and read about 3e8, which pinned every remote
+        // player past the walk (3 m/s) and run (5 m/s) thresholds of their animations.
+        const glm::vec3 here{cEntityPosition.x, cEntityPosition.y, cEntityPosition.z};
+        const auto now = std::chrono::steady_clock::now();
+        float speed = 0.f;
+        if (m_hasLastPosition)
+        {
+            const float elapsed = std::chrono::duration<float>(now - m_lastPositionAt).count();
+            if (elapsed > 0.001f)
+            {
+                speed = glm::distance(here, m_lastPosition) / elapsed;
+                // A teleport or a loading screen is not a sprint.
+                constexpr float kFastestPlausible = 20.f;
+                if (speed > kFastestPlausible)
+                    speed = 0.f;
+            }
+        }
+        m_lastPosition = here;
+        m_lastPositionAt = now;
+        m_hasLastPosition = true;
 
         common::Vector3 pos;
         pos.set_x(cEntityPosition.x);

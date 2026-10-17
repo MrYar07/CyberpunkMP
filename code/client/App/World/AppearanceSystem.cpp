@@ -55,6 +55,23 @@ Vector<String> AppearanceSystem::GetPlayerItems(Red::Handle<Red::GameObject> pla
     return equipment;
 }
 
+void AppearanceSystem::SetEntityName(Red::EntityID entityID, const std::string& acName)
+{
+    m_playerNames[entityID] = acName;
+}
+
+std::string AppearanceSystem::GetEntityName(Red::EntityID entityID) const
+{
+    const auto it = m_playerNames.find(entityID);
+    return it == m_playerNames.end() ? std::string() : it->second;
+}
+
+// std::string does not cross into script; this does.
+Red::CString AppearanceSystem::GetNetworkPlayerName(Red::EntityID aEntityId) const
+{
+    return Red::CString(GetEntityName(aEntityId).c_str());
+}
+
 void AppearanceSystem::AddEntity(const Red::EntityID entityID, const Red::DynArray<Red::TweakDBID>& items, const Vector<uint8_t> ccstate)
 {
     spdlog::info("Logging Entity Appearance: {}", entityID.hash);
@@ -184,10 +201,11 @@ bool AppearanceSystem::ApplyAppearance(Red::Handle<Red::game::Object> object)
         return false;
     }
 
-    // NOTE: leftover upstream debug code - sets every remote player's display name to
-    // "Test" by writing into a hand-mapped field. Verified NOT to be the spawn crash
-    // (execution reaches here fine), but it serves no purpose either.
-    object.instance->displayName.unk08 = Red::CString("Test");
+    // The player's name over their character's head (upstream had "Test" here). The muppet
+    // records' own names are blanked in the tweaks, or the nameplate would read those first.
+    const auto name = GetEntityName(object.instance->id);
+    if (!name.empty())
+        object.instance->displayName.unk08 = Red::CString(name.c_str());
 
     spdlog::info("Loaded bytes: {}", bytes.size());
 

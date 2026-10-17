@@ -47,6 +47,8 @@ public native class AppearanceSystem extends IScriptable {
     public native func GetEntityItems(entityID: EntityID) -> array<TweakDBID>;
     //public native func SetMorphWeights(player: ref<GameObject>) -> Void;
     public native func ApplyAppearance(player: ref<GameObject>) -> Bool;
+    // The player's name for one of their characters; empty for anything else.
+    public native func GetNetworkPlayerName(entityId: EntityID) -> String;
 
     private let m_callbackSystem: wref<CallbackSystem>;
     public let m_entities: array<wref<GameObject>>;
