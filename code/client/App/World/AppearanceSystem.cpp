@@ -66,6 +66,16 @@ std::string AppearanceSystem::GetEntityName(Red::EntityID entityID) const
     return it == m_playerNames.end() ? std::string() : it->second;
 }
 
+void AppearanceSystem::ForgetEntityName(Red::EntityID entityID)
+{
+    m_playerNames.erase(entityID);
+}
+
+void AppearanceSystem::ForgetEntityNames()
+{
+    m_playerNames.clear();
+}
+
 // std::string does not cross into script; this does.
 Red::CString AppearanceSystem::GetNetworkPlayerName(Red::EntityID aEntityId) const
 {

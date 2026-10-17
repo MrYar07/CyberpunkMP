@@ -346,10 +346,13 @@ namespace CampaignSystem
 
         private void Tick(float delta)
         {
-            lock (CampaignSession.Sync)
+            CampaignSession.Guard(logger, "Lobby vote tick", () =>
             {
-                vote?.Tick(delta, PlayerIds);
-            }
+                lock (CampaignSession.Sync)
+                {
+                    vote?.Tick(delta, PlayerIds);
+                }
+            });
         }
 
         private void SetHost(ulong? playerId)

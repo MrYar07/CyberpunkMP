@@ -180,22 +180,43 @@ namespace CampaignSystem
             logger.Info($"Campaign co-op ready, watching {watchedFacts.Count} quest fact(s)");
         }
 
+        // Timer ticks and player events are called from the native server without a catch
+        // (RPCs have one): an exception escaping here would end the server process, and
+        // with it everyone's session. Log it and carry on instead.
+        internal static void Guard(Logger logger, string what, Action action)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception e)
+            {
+                logger.Error($"{what} failed: {e}");
+            }
+        }
+
         private void OnPlayerJoin(ulong playerId)
         {
-            lock (sync)
+            Guard(logger, "Player join", () =>
             {
-                Lobby.Join(playerId);
-            }
+                lock (sync)
+                {
+                    Lobby.Join(playerId);
+                }
+            });
         }
 
         private void OnPlayerLeft(ulong playerId)
         {
-            lock (sync)
+            Guard(logger, "Player leave", () =>
             {
-                Lobby.Leave(playerId);
-                dialogVote?.Forget(playerId);
-                Combat.WorldChanged();
-            }
+                lock (sync)
+                {
+                    Lobby.Leave(playerId);
+                    dialogVote?.Forget(playerId);
+                    Combat.WorldChanged();
+                }
+            });
         }
 
         private void OnHostChanged(ulong? playerId)
@@ -523,11 +544,14 @@ namespace CampaignSystem
 
         private void Tick(float delta)
         {
-            lock (sync)
+            Guard(logger, "Dialog vote tick", () =>
             {
-                if (dialogVote is { Closed: false })
-                    dialogVote.Tick(delta, Voters());
-            }
+                lock (sync)
+                {
+                    if (dialogVote is { Closed: false })
+                        dialogVote.Tick(delta, Voters());
+                }
+            });
         }
 
         // Everyone whose world is up, host included.

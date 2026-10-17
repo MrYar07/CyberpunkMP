@@ -24,6 +24,10 @@ struct AppearanceSystem : RED4ext::IScriptable
     void SetEntityName(Red::EntityID entityID, const std::string& acName);
     std::string GetEntityName(Red::EntityID entityID) const;
     Red::CString GetNetworkPlayerName(Red::EntityID aEntityId) const;
+    // A character gone (or every one, with the world): its id may later belong to an NPC,
+    // which must not show a player's name on the scanner.
+    void ForgetEntityName(Red::EntityID entityID);
+    void ForgetEntityNames();
     Vector<String> GetPlayerItems(Red::Handle<Red::GameObject> player);
     bool ApplyAppearance(Red::Handle<Red::GameObject> object);
 

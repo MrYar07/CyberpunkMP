@@ -111,12 +111,14 @@ void NetworkWorldSystem::DeSpawn(uint64_t aServerId) const
     if (auto* pEntity = entity.get<EntityComponent>())
     {
         App::PuppetRegistry::Remove(pEntity->Id.hash);
+        m_appearanceSystem->ForgetEntityName(pEntity->Id);
         const auto handle = Red::GetGameSystem<NetworkWorldSystem>();
         Red::Detail::CallFunctionWithArgs(m_pDeletePuppet, handle, pEntity->Id);
     }
     else if (auto* pEntity = entity.get<SpawningComponent>())
     {
         App::PuppetRegistry::Remove(pEntity->Id.hash);
+        m_appearanceSystem->ForgetEntityName(pEntity->Id);
         const auto handle = Red::GetGameSystem<NetworkWorldSystem>();
         Red::Detail::CallFunctionWithArgs(m_pDeletePuppet, handle, pEntity->Id);
     }
@@ -231,6 +233,7 @@ void NetworkWorldSystem::OnAfterWorldDetach()
     each([](flecs::entity entity, EntityComponent&) { entity.destruct(); });
     each([](flecs::entity entity, SpawningComponent&) { entity.destruct(); });
     App::PuppetRegistry::Clear();
+    m_appearanceSystem->ForgetEntityNames();
 
     if (const auto pNetworkService = Core::Container::Get<NetworkService>())
         pNetworkService->ResetSpawn();

@@ -46,32 +46,53 @@ public native class CampaignServer extends ServerRpc {
 // ClientRpc functions are invoked without an instance, so they only route to CampaignSync.
 public class CampaignClient extends ClientRpc {
     public func SetRole(isHost: Bool) -> Void {
-        CampaignSync.Get().SetRole(isHost);
+        let sync = CampaignSync.Get();
+        if IsDefined(sync) {
+            sync.SetRole(isHost);
+        }
     }
 
     public func ApplyJournal(hash: Uint32, state: Int32) -> Void {
-        CampaignSync.Get().ApplyJournal(hash, state);
+        let sync = CampaignSync.Get();
+        if IsDefined(sync) {
+            sync.ApplyJournal(hash, state);
+        }
     }
 
     public func ApplyJournalBatch(entries: String) -> Void {
-        CampaignSync.Get().ApplyJournalBatch(entries);
+        let sync = CampaignSync.Get();
+        if IsDefined(sync) {
+            sync.ApplyJournalBatch(entries);
+        }
     }
 
     public func ApplyFact(name: String, value: Int32) -> Void {
-        CampaignSync.Get().ApplyFact(name, value);
+        let sync = CampaignSync.Get();
+        if IsDefined(sync) {
+            sync.ApplyFact(name, value);
+        }
     }
 
     public func ApplyFactBatch(entries: String) -> Void {
-        CampaignSync.Get().ApplyFactBatch(entries);
+        let sync = CampaignSync.Get();
+        if IsDefined(sync) {
+            sync.ApplyFactBatch(entries);
+        }
     }
 
     public func ApplyTracked(hash: Uint32) -> Void {
-        CampaignSync.Get().ApplyTracked(hash);
+        let sync = CampaignSync.Get();
+        if IsDefined(sync) {
+            sync.ApplyTracked(hash);
+        }
     }
 
     // The server sends the watch list in batches; the last one closes the host's snapshot.
     public func WatchFacts(names: String, last: Bool) -> Void {
-        CampaignSync.Get().WatchFacts(names, last);
+        let sync = CampaignSync.Get();
+        if IsDefined(sync) {
+            sync.WatchFacts(names, last);
+        }
     }
 
     // The lobby lives at the main menu, where there are no ScriptableSystems: these go to
@@ -106,7 +127,8 @@ public class CampaignClient extends ClientRpc {
 
     public func ReplayQuestNodes(entries: String) -> Void {
         let network = GameInstance.GetNetworkWorldSystem();
-        if IsDefined(network) && !CampaignSync.Get().IsHost() {
+        let sync = CampaignSync.Get();
+        if IsDefined(network) && IsDefined(sync) && !sync.IsHost() {
             network.ReplayQuestNodes(entries);
         }
     }
@@ -255,7 +277,10 @@ public class CampaignFactWatcher extends IScriptable {
     public let m_listenerId: Uint32;
 
     public func OnFactChanged(value: Int32) -> Void {
-        CampaignSync.Get().OnHostFactChanged(this.m_name, value);
+        let sync = CampaignSync.Get();
+        if IsDefined(sync) {
+            sync.OnHostFactChanged(this.m_name, value);
+        }
     }
 }
 
