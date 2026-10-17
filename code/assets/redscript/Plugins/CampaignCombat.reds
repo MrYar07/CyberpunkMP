@@ -72,6 +72,9 @@ public class CampaignCombat extends ScriptableSystem {
     public static func MatchRange() -> Float = 12.0
     // A guest spawns a stand-in for a hostile host NPC it lacks within this range.
     public static func ProxyRange() -> Float = 80.0
+    // ...once the host has reported it this long without a match: the mirrored quest node
+    // may still be spawning this game's own copy.
+    public static func ProxyDelay() -> Float = 5.0
     // A guest's copy this far from the host's is moved over.
     public static func DriftRange() -> Float = 30.0
     public static func ReviveRange() -> Float = 2.5
@@ -83,6 +86,11 @@ public class CampaignCombat extends ScriptableSystem {
 
     private let m_npcs: array<ref<CampaignNpc>>;
     private let m_proxies: array<ref<CampaignNpcProxy>>;
+    // Host keys reported without a match here, and since when.
+    private let m_unboundKeys: array<Uint64>;
+    private let m_unboundSince: array<Float>;
+    // This V is dying for real (bled out as host, or a wipe): no protection any more.
+    private let m_dying: Bool;
     private let m_polling: Bool;
     private let m_lastFull: Float;
 
@@ -342,12 +350,15 @@ public class CampaignCombat extends ScriptableSystem {
                 let state = StringToInt(f[7]);
                 let hostile = StringToInt(f[8]) != 0;
 
-                let entry = this.Bind(key, isStatic, record, position);
+                // A dead or beaten NPC is only matched by identity: by record and place it
+                // could take a living one of the same kind standing next to the body with it.
+                let entry = this.Bind(key, isStatic, record, position, state == 0);
                 if IsDefined(entry) {
                     entry.lastSeen = now;
                     this.ApplyNpc(player, entry, position, health, state, now);
                 } else {
-                    if hostile && state == 0 && Vector4.Distance(position, player.GetWorldPosition()) <= CampaignCombat.ProxyRange() {
+                    if hostile && state == 0 && Vector4.Distance(position, player.GetWorldPosition()) <= CampaignCombat.ProxyRange()
+                        && this.UnboundFor(key, now) >= CampaignCombat.ProxyDelay() {
                         this.SpawnProxy(key, record, position);
                     }
                 }
@@ -355,7 +366,27 @@ public class CampaignCombat extends ScriptableSystem {
         }
     }
 
-    private func Bind(key: Uint64, isStatic: Bool, record: TweakDBID, position: Vector4) -> ref<CampaignNpc> {
+    // How long the host has been reporting this key without a match here.
+    private func UnboundFor(key: Uint64, now: Float) -> Float {
+        let i = 0;
+        while i < ArraySize(this.m_unboundKeys) {
+            if Equals(this.m_unboundKeys[i], key) {
+                return now - this.m_unboundSince[i];
+            }
+            // Forget keys not seen for a minute (gone, or matched since).
+            if now - this.m_unboundSince[i] > 60.0 {
+                ArrayErase(this.m_unboundKeys, i);
+                ArrayErase(this.m_unboundSince, i);
+            } else {
+                i += 1;
+            }
+        }
+        ArrayPush(this.m_unboundKeys, key);
+        ArrayPush(this.m_unboundSince, now);
+        return 0.0;
+    }
+
+    private func Bind(key: Uint64, isStatic: Bool, record: TweakDBID, position: Vector4, byPlace: Bool) -> ref<CampaignNpc> {
         let entry = this.FindBound(key);
         if IsDefined(entry) {
             return entry;
@@ -376,7 +407,7 @@ public class CampaignCombat extends ScriptableSystem {
         }
 
         // The same character spawned by the mirrored quest node, close to where the host has it.
-        if !IsDefined(entry) {
+        if !IsDefined(entry) && byPlace {
             let best = CampaignCombat.MatchRange();
             for candidate in this.m_npcs {
                 if !candidate.bound && !candidate.proxy && candidate.record == record {
@@ -544,7 +575,7 @@ public class CampaignCombat extends ScriptableSystem {
     // Immortal while someone else is in the world; the health listener notices zero health.
     private func UpdateProtection() -> Void {
         let player = this.Player();
-        let wanted = this.m_coopPlayers >= 2 && IsDefined(player) && !player.IsDead();
+        let wanted = this.m_coopPlayers >= 2 && IsDefined(player) && !player.IsDead() && !this.m_dying;
         if wanted && this.m_protected && this.m_protectedId != player.GetEntityID() {
             this.Unprotect();
         }
@@ -595,10 +626,10 @@ public class CampaignCombat extends ScriptableSystem {
         this.m_bledOut = false;
         this.m_bleedOutLeft = CampaignCombat.BleedOutSeconds();
         GameInstance.GetGodModeSystem(this.GetGameInstance()).AddGodMode(player.GetEntityID(), gameGodModeType.Invulnerable, n"CampaignDowned");
-        StatusEffectHelper.ApplyStatusEffect(player, t"GameplayRestriction.NoWeapons");
-        StatusEffectHelper.ApplyStatusEffect(player, t"GameplayRestriction.ForceCrouch");
-        StatusEffectHelper.ApplyStatusEffect(player, t"GameplayRestriction.NoJump");
-        StatusEffectHelper.ApplyStatusEffect(player, t"GameplayRestriction.NoMovement");
+        CampaignHolds.Add(n"Downed", t"GameplayRestriction.NoWeapons");
+        CampaignHolds.Add(n"Downed", t"GameplayRestriction.ForceCrouch");
+        CampaignHolds.Add(n"Downed", t"GameplayRestriction.NoJump");
+        CampaignHolds.Add(n"Downed", t"GameplayRestriction.NoMovement");
         CampaignServer.ReportDowned(true);
         this.Message(s"You are down - a teammate can revive you (\(RoundF(this.m_bleedOutLeft)) s)");
         LogChannel(n"DEBUG", "[Campaign] downed");
@@ -608,10 +639,20 @@ public class CampaignCombat extends ScriptableSystem {
     // guest's game would load its own save and leave the story, so a guest is brought back
     // next to the host instead (Respawn).
     private func UpdateBleedOut() -> Void {
-        if !this.m_downed || this.m_bledOut {
+        if !this.m_downed {
             return;
         }
         this.m_bleedOutLeft -= CampaignCombat.PollSeconds();
+        // A guest that bled out waits for Respawn; if the server never answers (it did not
+        // know this player was down), get up here rather than lie there for good.
+        if this.m_bledOut {
+            if this.m_bleedOutLeft < -6.0 {
+                LogChannel(n"DEBUG", "[Campaign] no answer after bleeding out, getting up");
+                CampaignServer.ReportDowned(false);
+                this.OnRevived(50.0);
+            }
+            return;
+        }
         if this.m_bleedOutLeft > 0.0 {
             this.Message(s"You are down - a teammate can revive you (\(RoundF(this.m_bleedOutLeft)) s)");
             return;
@@ -629,14 +670,13 @@ public class CampaignCombat extends ScriptableSystem {
         let player = this.Player();
         this.m_downed = false;
         this.m_bledOut = false;
-        if !IsDefined(player) {
-            return;
+        CampaignHolds.Remove(n"Downed", t"GameplayRestriction.NoWeapons");
+        CampaignHolds.Remove(n"Downed", t"GameplayRestriction.ForceCrouch");
+        CampaignHolds.Remove(n"Downed", t"GameplayRestriction.NoJump");
+        CampaignHolds.Remove(n"Downed", t"GameplayRestriction.NoMovement");
+        if IsDefined(player) {
+            GameInstance.GetGodModeSystem(this.GetGameInstance()).RemoveGodMode(player.GetEntityID(), gameGodModeType.Invulnerable, n"CampaignDowned");
         }
-        GameInstance.GetGodModeSystem(this.GetGameInstance()).RemoveGodMode(player.GetEntityID(), gameGodModeType.Invulnerable, n"CampaignDowned");
-        StatusEffectHelper.RemoveStatusEffect(player, t"GameplayRestriction.NoWeapons");
-        StatusEffectHelper.RemoveStatusEffect(player, t"GameplayRestriction.ForceCrouch");
-        StatusEffectHelper.RemoveStatusEffect(player, t"GameplayRestriction.NoJump");
-        StatusEffectHelper.RemoveStatusEffect(player, t"GameplayRestriction.NoMovement");
     }
 
     // A guest who bled out comes back next to the host.
@@ -671,6 +711,7 @@ public class CampaignCombat extends ScriptableSystem {
 
     private func Die() -> Void {
         let player = this.Player();
+        this.m_dying = true;
         this.Unprotect();
         this.GetUp();
         if IsDefined(player) {

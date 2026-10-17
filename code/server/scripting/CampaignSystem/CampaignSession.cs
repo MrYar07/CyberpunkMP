@@ -185,7 +185,7 @@ namespace CampaignSystem
             lock (sync)
             {
                 Lobby.Leave(playerId);
-                Combat.PlayerLeft(playerId);
+                dialogVote?.Forget(playerId);
                 Combat.WorldChanged();
             }
         }
@@ -225,6 +225,7 @@ namespace CampaignSystem
             lock (sync)
             {
                 Lobby.SetInWorld(playerId, false);
+                dialogVote?.Forget(playerId);
                 Combat.WorldChanged();
 
                 if (playerId == hostId && hostInWorld)
@@ -241,15 +242,17 @@ namespace CampaignSystem
 
         private void EnterWorldLocked(ulong playerId)
         {
-            Story.EnterWorld(playerId);
-
             if (playerId == hostId)
             {
                 PromoteToHost(playerId);
+                Story.EnterWorld(playerId);
                 return;
             }
 
+            // The role first: a guest's game ignores guest-only messages (the host's mode)
+            // until it knows it is a guest.
             CampaignClient.SetRole(playerId, false);
+            Story.EnterWorld(playerId);
 
             if (!snapshotReady)
             {

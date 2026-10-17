@@ -67,6 +67,10 @@ public class CampaignExtras extends ScriptableSystem {
     private let m_anchorForward: Vector4;
     private let m_anchored: Bool;
     private let m_sceneKey: String;
+    // The key the last scene ended with. QuestMirror keeps the last scene that started, so a
+    // later scene that did not come through it (sitting down at a bar) would otherwise get
+    // that scene's poses.
+    private let m_endedKey: String;
 
     public static func Get() -> ref<CampaignExtras> {
         let container = GameInstance.GetScriptableSystemsContainer(GetGameInstance());
@@ -113,6 +117,8 @@ public class CampaignExtras extends ScriptableSystem {
             return;
         }
         this.m_active = false;
+        this.m_endedKey = this.m_sceneKey;
+        this.m_sceneKey = "";
         this.ReleaseAll();
         this.m_mode = 0;
         this.m_speaker = null;
@@ -137,6 +143,9 @@ public class CampaignExtras extends ScriptableSystem {
 
         let mode = this.LocalMode(player);
         let sceneKey = GameInstance.GetNetworkWorldSystem().GetSceneKey();
+        if Equals(sceneKey, this.m_endedKey) {
+            sceneKey = "";
+        }
         if mode != this.m_mode || NotEquals(sceneKey, this.m_sceneKey) {
             this.ReleaseAll();
             this.m_mode = mode;
@@ -193,7 +202,7 @@ public class CampaignExtras extends ScriptableSystem {
         let extra = new CampaignExtra();
         extra.entity = puppet;
         extra.id = puppet.GetEntityID();
-        extra.slot = ArraySize(this.m_extras);
+        extra.slot = this.FreeSlot();
 
         let placed = false;
         if this.m_mode == 1 {
@@ -389,19 +398,26 @@ public class CampaignExtras extends ScriptableSystem {
     }
 
     // Every extra's pose relative to V, in slot order, as CampaignStory stores them.
+    // A slot nobody holds right now (a player left) is "-": no pose, placed automatically.
     public func DescribePoses() -> String {
+        let last = -1;
+        for extra in this.m_extras {
+            last = Max(last, extra.slot);
+        }
         let out = "";
         let slot = 0;
-        while slot < ArraySize(this.m_extras) {
+        while slot <= last {
+            let pose = "-";
             for extra in this.m_extras {
                 if extra.slot == slot {
                     this.Measure(extra);
-                    if StrLen(out) > 0 {
-                        out += "|";
-                    }
-                    out += s"\(FloatToStringPrec(extra.right, 2)):\(FloatToStringPrec(extra.forward, 2)):\(FloatToStringPrec(extra.up, 2)):\(FloatToStringPrec(extra.yaw, 0))";
+                    pose = s"\(FloatToStringPrec(extra.right, 2)):\(FloatToStringPrec(extra.forward, 2)):\(FloatToStringPrec(extra.up, 2)):\(FloatToStringPrec(extra.yaw, 0))";
                 }
             }
+            if slot > 0 {
+                out += "|";
+            }
+            out += pose;
             slot += 1;
         }
         return out;
@@ -438,6 +454,24 @@ public class CampaignExtras extends ScriptableSystem {
         spot.kind = StringToInt(parts[6]);
         spot.taken = Vector4.Distance(spot.position, center) < CampaignExtras.OwnSpotRange();
         ArrayPush(this.m_spots, spot);
+    }
+
+    // The lowest number no extra has: someone leaving does not shift the others' poses.
+    private func FreeSlot() -> Int32 {
+        let slot = 0;
+        while this.HasSlot(slot) {
+            slot += 1;
+        }
+        return slot;
+    }
+
+    private func HasSlot(slot: Int32) -> Bool {
+        for extra in this.m_extras {
+            if extra.slot == slot {
+                return true;
+            }
+        }
+        return false;
     }
 
     private func Has(id: EntityID) -> Bool {

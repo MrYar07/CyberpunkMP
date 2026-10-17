@@ -581,6 +581,10 @@ public class CampaignLobby extends ScriptableService {
     }
 
     public func OnWorldGone() -> Void {
+        // The character as it is now, not as the last timed report had it (quitting, loading).
+        if this.m_worldReported && CampaignLobby.IsConnected() && Equals(this.m_phase, "started") && !this.m_restorePending {
+            CampaignCharacter.Report(GetGameInstance());
+        }
         if this.m_worldReported && CampaignLobby.IsConnected() {
             CampaignServer.LeaveWorld();
         }
@@ -1052,7 +1056,8 @@ protected cb func OnReleaseCorpo(e: ref<inkPointerEvent>) -> Bool {
 
 @wrapMethod(ExpansionNewGame)
 protected cb func OnPressBaseGame(evt: ref<inkPointerEvent>) -> Bool {
-    if CampaignLobby.Get().BlocksStart(false) {
+    let lobby = CampaignLobby.Get();
+    if IsDefined(lobby) && lobby.BlocksStart(false) {
         return false;
     }
     return wrappedMethod(evt);
@@ -1060,7 +1065,8 @@ protected cb func OnPressBaseGame(evt: ref<inkPointerEvent>) -> Bool {
 
 @wrapMethod(ExpansionNewGame)
 protected cb func OnPressExpansion(evt: ref<inkPointerEvent>) -> Bool {
-    if CampaignLobby.Get().BlocksStart(true) {
+    let lobby = CampaignLobby.Get();
+    if IsDefined(lobby) && lobby.BlocksStart(true) {
         return false;
     }
     return wrappedMethod(evt);

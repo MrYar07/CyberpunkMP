@@ -60,7 +60,8 @@ namespace CampaignSystem
         private readonly Func<bool> hostInWorld;
         private readonly Func<List<ulong>> inWorld;
 
-        private readonly HashSet<ulong> downed = new();
+        // Downed players and their character's id (kept: a player who left has none to look up).
+        private readonly Dictionary<ulong, ulong> downed = new();
         private int lastCount = -1;
         private bool wiped;
 
@@ -108,7 +109,7 @@ namespace CampaignSystem
             var players = inWorld();
 
             // Downed players who left the world are not down any more.
-            foreach (var id in downed.Where(id => !players.Contains(id)).ToList())
+            foreach (var id in downed.Keys.Where(id => !players.Contains(id)).ToList())
                 SetDowned(id, false, players);
 
             if (players.Count != lastCount)
@@ -139,11 +140,6 @@ namespace CampaignSystem
             WorldChanged();
         }
 
-        internal void PlayerLeft(ulong playerId)
-        {
-            downed.Remove(playerId);
-        }
-
         internal void ReportDowned(ulong playerId, bool isDowned)
         {
             lock (sync)
@@ -154,7 +150,7 @@ namespace CampaignSystem
 
                 SetDowned(playerId, isDowned, players);
 
-                if (!isDowned || wiped || players.Count < 2 || !players.All(downed.Contains))
+                if (!isDowned || wiped || players.Count < 2 || !players.All(downed.ContainsKey))
                     return;
 
                 // Everyone is down. The host's game runs the story, so its V dies and the game
@@ -174,10 +170,10 @@ namespace CampaignSystem
             lock (sync)
             {
                 var players = inWorld();
-                if (!players.Contains(playerId) || downed.Contains(playerId))
+                if (!players.Contains(playerId) || downed.ContainsKey(playerId))
                     return;
 
-                var target = downed.FirstOrDefault(id => Server.PlayerSystem.GetById(id)?.PuppetId == puppetId);
+                var target = downed.FirstOrDefault(entry => entry.Value == puppetId).Key;
                 if (target == 0 || target == playerId)
                     return;
 
@@ -192,7 +188,7 @@ namespace CampaignSystem
             lock (sync)
             {
                 var players = inWorld();
-                if (!downed.Contains(playerId))
+                if (!downed.ContainsKey(playerId))
                     return;
 
                 SetDowned(playerId, false, players);
@@ -218,7 +214,7 @@ namespace CampaignSystem
 
         private void ReviveAll(List<ulong> players, float health)
         {
-            foreach (var id in downed.ToList())
+            foreach (var id in downed.Keys.ToList())
             {
                 if (players.Contains(id))
                     CampaignClient.Revived(id, health);
@@ -228,14 +224,20 @@ namespace CampaignSystem
 
         private void SetDowned(ulong playerId, bool isDowned, List<ulong> players)
         {
-            if (isDowned ? !downed.Add(playerId) : !downed.Remove(playerId))
-                return;
-
+            ulong puppetId;
             if (isDowned)
+            {
+                puppetId = Server.PlayerSystem.GetById(playerId)?.PuppetId ?? 0;
+                if (!downed.TryAdd(playerId, puppetId))
+                    return;
                 logger.Info($"Player {playerId} is down");
+            }
+            else if (!downed.Remove(playerId, out puppetId))
+            {
+                return;
+            }
 
             // Everyone else sees the downed character and can walk up to it.
-            var puppetId = Server.PlayerSystem.GetById(playerId)?.PuppetId ?? 0;
             if (puppetId == 0)
                 return;
 

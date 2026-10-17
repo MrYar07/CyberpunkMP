@@ -154,8 +154,8 @@ public class CampaignStory extends ScriptableSystem {
         }
         this.m_held = true;
         GameInstance.GetGodModeSystem(this.GetGameInstance()).AddGodMode(player.GetEntityID(), gameGodModeType.Invulnerable, n"CampaignHostMode");
-        StatusEffectHelper.ApplyStatusEffect(player, t"GameplayRestriction.NoMovement");
-        StatusEffectHelper.ApplyStatusEffect(player, t"GameplayRestriction.NoWeapons");
+        CampaignHolds.Add(n"HostMode", t"GameplayRestriction.NoMovement");
+        CampaignHolds.Add(n"HostMode", t"GameplayRestriction.NoWeapons");
     }
 
     private func Release() -> Void {
@@ -164,12 +164,11 @@ public class CampaignStory extends ScriptableSystem {
             return;
         }
         this.m_held = false;
-        if !IsDefined(player) {
-            return;
+        CampaignHolds.Remove(n"HostMode", t"GameplayRestriction.NoMovement");
+        CampaignHolds.Remove(n"HostMode", t"GameplayRestriction.NoWeapons");
+        if IsDefined(player) {
+            GameInstance.GetGodModeSystem(this.GetGameInstance()).RemoveGodMode(player.GetEntityID(), gameGodModeType.Invulnerable, n"CampaignHostMode");
         }
-        GameInstance.GetGodModeSystem(this.GetGameInstance()).RemoveGodMode(player.GetEntityID(), gameGodModeType.Invulnerable, n"CampaignHostMode");
-        StatusEffectHelper.RemoveStatusEffect(player, t"GameplayRestriction.NoMovement");
-        StatusEffectHelper.RemoveStatusEffect(player, t"GameplayRestriction.NoWeapons");
     }
 
     public func OnHostTeleported(from: Vector4, to: Vector4) -> Void {

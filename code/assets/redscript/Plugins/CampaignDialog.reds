@@ -550,7 +550,7 @@ public class CampaignDialog extends ScriptableSystem {
         if tier >= EnumInt(GameplayTier.Tier4_FPPCinematic) && this.m_localTier < EnumInt(GameplayTier.Tier3_LimitedGameplay) {
             if !this.m_held {
                 this.m_held = true;
-                StatusEffectHelper.ApplyStatusEffect(player, t"GameplayRestriction.NoMovement");
+                CampaignHolds.Add(n"Scene", t"GameplayRestriction.NoMovement");
             }
         } else {
             this.Release();
@@ -562,10 +562,7 @@ public class CampaignDialog extends ScriptableSystem {
             return;
         }
         this.m_held = false;
-        let player = GameInstance.GetPlayerSystem(this.GetGameInstance()).GetLocalPlayerMainGameObject();
-        if IsDefined(player) {
-            StatusEffectHelper.RemoveStatusEffect(player, t"GameplayRestriction.NoMovement");
-        }
+        CampaignHolds.Remove(n"Scene", t"GameplayRestriction.NoMovement");
     }
 }
 

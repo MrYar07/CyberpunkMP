@@ -524,3 +524,81 @@ public class CampaignSync extends ScriptableSystem {
         }
     }
 }
+
+// Restrictions (status effects such as GameplayRestriction.NoMovement) that several campaign
+// systems put on the local V for reasons of their own - a scene hold, being downed, waiting
+// out the host's braindance. An effect is lifted only once no reason wants it any more, so
+// one system ending its hold never frees V from another's.
+public class CampaignHolds extends ScriptableSystem {
+    private let m_reasons: array<CName>;
+    private let m_effects: array<TweakDBID>;
+
+    public static func Get() -> ref<CampaignHolds> {
+        let container = GameInstance.GetScriptableSystemsContainer(GetGameInstance());
+        return container.Get(n"CyberpunkMP.Plugins.CampaignHolds") as CampaignHolds;
+    }
+
+    public static func Add(reason: CName, effect: TweakDBID) -> Void {
+        let holds = CampaignHolds.Get();
+        if IsDefined(holds) {
+            holds.AddHold(reason, effect);
+        }
+    }
+
+    public static func Remove(reason: CName, effect: TweakDBID) -> Void {
+        let holds = CampaignHolds.Get();
+        if IsDefined(holds) {
+            holds.RemoveHold(reason, effect);
+        }
+    }
+
+    private func Player() -> ref<GameObject> {
+        return GameInstance.GetPlayerSystem(this.GetGameInstance()).GetLocalPlayerMainGameObject();
+    }
+
+    private func IndexOf(reason: CName, effect: TweakDBID) -> Int32 {
+        let i = 0;
+        while i < ArraySize(this.m_reasons) {
+            if Equals(this.m_reasons[i], reason) && this.m_effects[i] == effect {
+                return i;
+            }
+            i += 1;
+        }
+        return -1;
+    }
+
+    private func Wanted(effect: TweakDBID) -> Bool {
+        for wanted in this.m_effects {
+            if wanted == effect {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public func AddHold(reason: CName, effect: TweakDBID) -> Void {
+        if this.IndexOf(reason, effect) >= 0 {
+            return;
+        }
+        let first = !this.Wanted(effect);
+        ArrayPush(this.m_reasons, reason);
+        ArrayPush(this.m_effects, effect);
+        let player = this.Player();
+        if first && IsDefined(player) {
+            StatusEffectHelper.ApplyStatusEffect(player, effect);
+        }
+    }
+
+    public func RemoveHold(reason: CName, effect: TweakDBID) -> Void {
+        let i = this.IndexOf(reason, effect);
+        if i < 0 {
+            return;
+        }
+        ArrayErase(this.m_reasons, i);
+        ArrayErase(this.m_effects, i);
+        let player = this.Player();
+        if !this.Wanted(effect) && IsDefined(player) {
+            StatusEffectHelper.RemoveStatusEffect(player, effect);
+        }
+    }
+}

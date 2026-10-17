@@ -205,6 +205,13 @@ void InterpolationSystem::OnAfterWorldDetach()
     spdlog::info("[InterpolationSystem] OnAfterWorldDetach");
 
     m_ready = false;
+
+    // A scene cut short by loading or quitting leaves nothing behind for the next world.
+    s_sceneSpacing = false;
+    {
+        std::lock_guard _(s_heldLock);
+        s_held.clear();
+    }
 }
 
 void InterpolationSystem::OnConnected()
