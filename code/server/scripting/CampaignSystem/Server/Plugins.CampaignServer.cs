@@ -38,5 +38,37 @@ public static partial class CampaignServer
 
 	public static partial void ReportFact_Impl(ulong playerId, string name, int value);
 
+	[ServerRpc(Class = 17961805562553929976, Function = 11441971209235894982)]
+	public static void ReportJournalBatch(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+		var entries = data.ReadString();
+
+		ReportJournalBatch_Impl(playerId, entries);
+	}
+
+	public static partial void ReportJournalBatch_Impl(ulong playerId, string entries);
+
+	[ServerRpc(Class = 17961805562553929976, Function = 5621148032962600987)]
+	public static void ReportFactBatch(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+		var entries = data.ReadString();
+
+		ReportFactBatch_Impl(playerId, entries);
+	}
+
+	public static partial void ReportFactBatch_Impl(ulong playerId, string entries);
+
+	[ServerRpc(Class = 17961805562553929976, Function = 11417019603990338055)]
+	public static void ReportSnapshotDone(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+
+		ReportSnapshotDone_Impl(playerId);
+	}
+
+	public static partial void ReportSnapshotDone_Impl(ulong playerId);
+
 }
 }

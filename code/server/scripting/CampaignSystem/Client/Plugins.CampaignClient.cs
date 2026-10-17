@@ -55,14 +55,41 @@ public static class CampaignClient
 		}
 	}
 
-	[ClientRpc(Class = 6609351954351555900, Function = 3766054951905563602)]
-	public static void WatchFact(ulong playerId, string name)
+	[ClientRpc(Class = 6609351954351555900, Function = 3832221148467506498)]
+	public static void ApplyJournalBatch(ulong playerId, string entries)
 	{
 		ushort length = 0;
 		var data = IBuffer.Create();
 		try{
-			data.WriteString(name);
-			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 3766054951905563602, data);
+			data.WriteString(entries);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 3832221148467506498, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
+	[ClientRpc(Class = 6609351954351555900, Function = 16191772821852103993)]
+	public static void ApplyFactBatch(ulong playerId, string entries)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteString(entries);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 16191772821852103993, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
+	[ClientRpc(Class = 6609351954351555900, Function = 17240541256849234437)]
+	public static void WatchFacts(ulong playerId, string names, bool last)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteString(names);
+			data.WriteBool(last);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 17240541256849234437, data);
 		} finally {
 			IBuffer.Release(data);
 		}

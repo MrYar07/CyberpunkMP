@@ -15,36 +15,61 @@ podbierania pojedynczych poprawek.
 - Kiedy host wyjdzie, fabuła stoi do czasu, aż wejdzie nowy host. Nowy host zaczyna od
   czystego stanu na serwerze i wysyła własny zrzut.
 
-## Co jest zsynchronizowane (etap 1)
+## Co jest zsynchronizowane
 
 | Element | Jak |
 |---|---|
 | Dziennik questów (questy, fazy, cele) | Host nasłuchuje `JournalManager` (`gameJournalListenerType.State`) i przy połączeniu wysyła pełny zrzut. Goście dostają `ChangeEntryStateByHash` z powiadomieniem. |
-| Fakty questów | Lista nazw w `config/campaign_facts.txt` na serwerze. Host rejestruje `QuestsSystem.RegisterListener` dla każdej i wysyła aktualną wartość. Goście dostają `SetFactStr`. |
+| Fakty questów | Domyślna lista (16 164 faktów: 11 083 bazy, 5 081 Phantom Liberty) jest wbudowana w plugin. Host rejestruje `QuestsSystem.RegisterListener` dla każdego faktu i wysyła wartości różne od zera. Goście dostają `SetFactStr` — także zera, więc fakty, których host nie ma, są u gościa kasowane. |
 | Pozycja, wygląd, pojazdy | To, co już robi CyberpunkMP. |
 
-Kod:
-- `code/assets/redscript/Plugins/Campaign.reds` — klient (`CampaignSync`, RPC).
-- `code/server/scripting/CampaignSystem/` — plugin serwera (`CampaignSession`).
-- `Server/` i `Client/` w pluginie to kod generowany. Identyfikatory RPC to FNV1a64:
-  klasa `CyberpunkMP.Plugins.<Klasa>`, funkcja serwera po krótkiej nazwie, funkcja klienta
-  po nazwie zmangowanej (`ApplyJournal;Uint32Int32`). Uruchomienie gry z
-  `-rpc -rpcdir="<ścieżka>"` generuje je od nowa.
+### Przebieg sesji
 
-## Znane ograniczenia etapu 1
+1. Pierwszy gracz zostaje hostem: `SetRole(true)`, potem lista faktów w paczkach
+   `WatchFacts(nazwy, last)`.
+2. Host wysyła zrzut dziennika i faktów (`ReportJournalBatch`, `ReportFactBatch`), a po
+   ostatniej paczce `ReportSnapshotDone`.
+3. Dopiero wtedy serwer wysyła pełny stan gościom (`ApplyJournalBatch`, `ApplyFactBatch`).
+   Gość, który wejdzie wcześniej, czeka na zrzut hosta.
+4. Dalej idą pojedyncze zmiany: `ReportJournal`/`ReportFact` → `ApplyJournal`/`ApplyFact`.
+
+Paczka to jeden `String` z parami `klucz:wartość` rozdzielonymi przecinkami, do 16 000
+znaków. Bufor RPC ma 64 KB, a string do 65 535 bajtów, więc jest duży zapas. String zamiast
+tablic, bo generator stubów C# źle nazywa tablice typów prostych.
+
+### Lista faktów
+
+Źródło: grafy questów i scen gry (`.quest`, `.questphase`, `.scene` z archiwów bazy i
+`ep1`). Do listy trafia każdy fakt, który graf **zapisuje** (`questSetVar_NodeType`), bez
+faktów deweloperskich (`*_test_def`, `debug`, `demo`). Fakty, które grafy tylko czytają,
+ustawia kod gry, często per gracz (pojazd, walka, UI) — celowo pominięte.
+
+Generowanie od nowa (np. po patchu gry), WolvenKit CLI 8.20+:
+
+```
+python tools/campaign/extract_facts.py --game "<Cyberpunk 2077>" ^
+    --wolvenkit <WolvenKit.CLI.exe> --work <pusty katalog roboczy> ^
+    --out code/server/scripting/CampaignSystem/campaign_facts.txt
+```
+
+Zmiany lokalne na serwerze: `config/campaign_facts.txt` — `nazwa` dodaje fakt,
+`-nazwa` go usuwa.
+
+## Znane ograniczenia
 
 - Goście nadal mają własne grafy questów. Jeśli gość wczyta zapis z innego miejsca
   fabuły, jego gra może sama posuwać questy. Na razie: gość wczytuje zapis sprzed tego
   samego questa co host. Wyciszenie questów u gości to etap 3.
-- Lista faktów jest pusta, dopóki nie zostanie wyciągnięta z grafów questów (etap 2).
+- Host rejestruje kilka tysięcy listenerów faktów naraz. Jeśli to okaże się za drogie,
+  zamiennikiem jest natywny hook zapisu FactsDB (RED4ext).
 - NPC, walka, sceny i dialogi nie są synchronizowane.
 
 ## Plan
 
 1. **Szkielet sesji** (ten etap): rola hosta, dziennik, fakty z listy, stan dla
    spóźnionych graczy.
-2. **Lista faktów z gry**: wyciągnięcie nazw faktów z `.questphase` (WolvenKit CLI),
-   osobno dla bazy i `ep1`.
+2. **Lista faktów z gry** (zrobione): nazwy faktów z grafów questów i scen (WolvenKit CLI),
+   paczkowanie RPC.
 3. **Wyciszenie questów u gości** i wspólny start: gość wchodzi do świata hosta zamiast
    własnego zapisu.
 4. **Sceny i dialogi**: przy starcie sceny u hosta goście są przenoszeni do niego i
@@ -74,8 +99,8 @@ set CYBERPUNKMP_ADMIN_PASSWORD=<hasło>
 build\windows\x64\release\Server.Loader.exe
 ```
 
-W logu powinno być `[Plugin:Campaign] Campaign co-op ready`. Lista faktów do
-synchronizacji: `build\windows\x64\release\config\campaign_facts.txt`.
+W logu powinno być `[Plugin:Campaign] Campaign co-op ready, watching N quest fact(s)`.
+Lokalne zmiany listy faktów: `build\windows\x64\release\config\campaign_facts.txt`.
 
 Sprawdzenie skryptów przed wgraniem do gry:
 
