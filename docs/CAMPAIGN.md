@@ -66,17 +66,51 @@ Zmiany lokalne na serwerze: `config/campaign_facts.txt` — `nazwa` dodaje fakt,
 
 ## Plan
 
-1. **Szkielet sesji** (ten etap): rola hosta, dziennik, fakty z listy, stan dla
+1. **Szkielet sesji** (zrobione): rola hosta, dziennik, fakty z listy, stan dla
    spóźnionych graczy.
 2. **Lista faktów z gry** (zrobione): nazwy faktów z grafów questów i scen (WolvenKit CLI),
    paczkowanie RPC.
-3. **Wyciszenie questów u gości** i wspólny start: gość wchodzi do świata hosta zamiast
-   własnego zapisu.
+3. **Lobby, zapis kampanii i wspólny start** (szczegóły niżej): gracze zbierają się w
+   lobby, host wybiera nową grę albo wczytanie kampanii. Goście nie uruchamiają własnych
+   questów, tylko wchodzą do świata hosta.
 4. **Sceny i dialogi**: przy starcie sceny u hosta goście są przenoszeni do niego i
-   oglądają. Wybory dialogowe robi host.
+   oglądają. **O opcjach dialogowych gracze głosują** (zasady niżej), wynik wybiera gra
+   hosta.
 5. **NPC i walka**: AI liczona u hosta, klienci zgłaszają trafienia.
 6. **Przejście kampanii misja po misji**, potem Phantom Liberty. Łatki na sceny, które
    zakładają jednego V (Johnny, braindance, Songbird).
+
+### Lobby (etap 3)
+
+- Serwer trzyma stan lobby: lista graczy, gotowość, kto jest hostem, wybór hosta.
+- Host wybiera:
+  - **Nowa gra**: każdy gracz tworzy swoją postać w kreatorze gry. Ścieżkę życia (Korpo,
+    Nomada, Dziecko ulicy) wybiera głosowanie, bo prolog jest jeden dla wszystkich —
+    zwycięska ścieżka obowiązuje każdego gracza.
+  - **Wczytaj kampanię**: zapis gry hosta + zapis kampanii na serwerze.
+- **Zapis kampanii** = zapis gry hosta (świat i fabuła) + plik na serwerze
+  `campaigns/<nazwa>.json` z postaciami wszystkich graczy: wygląd z kreatora, ścieżka
+  życia, poziom, atrybuty, perki, ekwipunek, pieniądze, powiązany po nazwie gracza.
+  Przy wczytaniu każdy gość dostaje swoją postać z powrotem; gracz spoza zapisu
+  tworzy nową.
+- Otwarte pytanie techniczne: CyberpunkMP łączy się z serwerem dopiero w świecie gry
+  (HUD `MultiplayerGameController`), nie w menu głównym. Lobby albo dostanie połączenie
+  w menu, albo będzie „poczekalnią” w lekkim świecie (wzór NCO: spawn `#q000_spwn_start`).
+
+### Głosowanie (ścieżka życia i dialogi)
+
+- Każdy gracz, także host, ma jeden głos. Wygrywa opcja z największą liczbą głosów.
+- **Remis**: losowanie spośród remisujących opcji.
+- Czas: 15 s na głos (ustawienie serwera). Przy dialogach na czas gry obowiązuje zegar
+  gry. Po czasie liczą się oddane głosy; jeśli nikt nie zagłosował, wybór należy do hosta
+  (przy ścieżce życia: losowanie spośród wszystkich trzech).
+- Głos można zmienić do końca czasu. Wszyscy widzą głosy na żywo.
+- Opcje widoczne w głosowaniu to opcje dostępne dla postaci hosta (testy umiejętności,
+  opcje ścieżki życia) — to jego gra prowadzi dialog. Rozszerzenie na później: opcja
+  dostępna, jeśli spełnia ją którykolwiek gracz.
+- Do zbadania: jak gra hosta wybiera opcję bez wciśnięcia klawisza (`dialogUI.script`,
+  blackboard `UIInteractions`), a kreator — ścieżkę
+  (`characterCreationGenderBackstoryMenu.script`).
 
 ## Budowanie
 
