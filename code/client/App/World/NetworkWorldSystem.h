@@ -9,6 +9,7 @@
 #include "ChatSystem.h"
 #include "InterpolationSystem.h"
 #include "VehicleSystem.h"
+#include "SceneSpots.h"
 
 struct NetworkWorldSystem : RED4ext::IGameSystem, Core::HookingAgent, flecs::world
 {
@@ -62,6 +63,10 @@ struct NetworkWorldSystem : RED4ext::IGameSystem, Core::HookingAgent, flecs::wor
     Red::CString TakeQuestNodes();
     void ReplayQuestNodes(const Red::CString& aEntries);
     void SetSceneSpacing(bool aEnabled, const Red::Vector4& aAnchor, const Red::Vector4& aForward);
+    void SetPuppetHeld(Red::EntityID aEntity, bool aHeld);
+    void SetVehicleSyncPaused(bool aPaused);
+    Red::CString FindSceneSpots(const Red::Handle<Red::world::StreamingSector>& aSector, const Red::Vector4& aCenter, float aRadius);
+    Red::NodeRef NodeRefFromNumber(uint64_t aValue) const;
     void OnConnected();
     void OnDisconnected(Client::EDisconnectReason);
 
@@ -109,6 +114,10 @@ RTTI_DEFINE_CLASS(NetworkWorldSystem, {
     RTTI_METHOD(TakeQuestNodes);
     RTTI_METHOD(ReplayQuestNodes);
     RTTI_METHOD(SetSceneSpacing);
+    RTTI_METHOD(SetPuppetHeld);
+    RTTI_METHOD(SetVehicleSyncPaused);
+    RTTI_METHOD(FindSceneSpots);
+    RTTI_METHOD(NodeRefFromNumber);
     RTTI_METHOD(GetEntityIdByServerId);
     RTTI_METHOD(GetAppearanceSystem);
     RTTI_METHOD(GetInterpolationSystem);

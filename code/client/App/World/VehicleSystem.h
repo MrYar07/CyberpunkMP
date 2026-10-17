@@ -19,6 +19,10 @@ struct VehicleSystem : RED4ext::IScriptable
     std::optional<uint64_t> GetVehicleRemoteId() const;
     std::optional<Red::EntityID> GetVehicleGameId() const;
 
+    // Campaign scenes: every game has its own copy of a scene's car, so getting into one is
+    // not sent to the server (other games would spawn a second car).
+    static void SetScenePaused(bool aPaused);
+
 protected:
 
     void OnVehicleEnter(Red::EntityID aVehicle, const Red::TweakDBID& aVehicleTdbid, Red::CName aName, const Red::Vector4& aPostion, const Red::Quaternion& aOrientation);
@@ -40,6 +44,7 @@ private:
     Red::CBaseFunction* m_pExitVehicle;
     std::optional<uint64_t> m_vehicleRemoteId;
     std::optional<Red::EntityID> m_vehicleGameId;
+    bool m_enterSkipped{false};
 };
 
 RTTI_DEFINE_CLASS(VehicleSystem, { 

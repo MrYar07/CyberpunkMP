@@ -27,6 +27,14 @@ public native class NetworkWorldSystem extends IGameSystem {
     public native func ReplayQuestNodes(entries: String) -> Void;
     // Other players' characters near the scene spot (anchor, facing forward) stand beside it.
     public native func SetSceneSpacing(enabled: Bool, anchor: Vector4, forward: Vector4) -> Void;
+    // A puppet placed by the local scene (seat, chair, spot) stops following its player.
+    public native func SetPuppetHeld(entity: EntityID, held: Bool) -> Void;
+    // While a scene runs, getting into its car is not sent (every game has its own copy).
+    public native func SetVehicleSyncPaused(paused: Bool) -> Void;
+    // Free places near a scene in a loaded sector: ';'-separated "node:x:y:z:fx:fy:kind"
+    // (kind 1 = sit, 2 = stand with an idle gesture).
+    public native func FindSceneSpots(sector: ref<worldStreamingSector>, center: Vector4, radius: Float) -> String;
+    public native func NodeRefFromNumber(value: Uint64) -> NodeRef;
     public native func GetEntityIdByServerId(serverId: Uint64) -> EntityID;
     public native func GetAppearanceSystem() -> ref<AppearanceSystem>;
     public native func GetChatSystem() -> ref<ChatSystem>;

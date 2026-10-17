@@ -20,6 +20,9 @@ struct InterpolationSystem : RED4ext::IScriptable, Core::HookingAgent
     // characters arrive there too. While enabled, those within reach of the spot stand
     // beside it instead, alternating sides.
     static void SetSceneSpacing(bool aEnabled, const glm::vec3& aAnchor, float aYaw);
+    // A character the local scene has placed (car seat, chair, a spot beside V) is left
+    // where it is until released.
+    static void SetHeld(uint64_t aEntityHash, bool aHeld);
 
 protected:
 

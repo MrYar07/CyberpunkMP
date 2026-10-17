@@ -482,6 +482,12 @@ public class CampaignDialog extends ScriptableSystem {
             }
         }
         this.UpdateSceneSpacing();
+
+        // The other players as extras in this scene (car seats, free chairs, beside V).
+        let extras = CampaignExtras.Get();
+        if IsDefined(extras) {
+            extras.OnScene(tier >= EnumInt(GameplayTier.Tier3_LimitedGameplay));
+        }
     }
 
     public func OnScenePoll() -> Void {
@@ -490,6 +496,10 @@ public class CampaignDialog extends ScriptableSystem {
             return;
         }
         this.UpdateSceneSpacing();
+        let extras = CampaignExtras.Get();
+        if IsDefined(extras) {
+            extras.Update();
+        }
         GameInstance.GetDelaySystem(this.GetGameInstance()).DelayCallback(new CampaignScenePoll(), CampaignDialog.ScenePollSeconds(), false);
     }
 

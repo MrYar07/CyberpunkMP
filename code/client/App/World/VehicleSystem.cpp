@@ -55,9 +55,23 @@ std::optional<Red::EntityID> VehicleSystem::GetVehicleGameId() const
     return m_vehicleGameId;
 }
 
+namespace
+{
+std::atomic_bool s_scenePaused{false};
+}
+
+void VehicleSystem::SetScenePaused(bool aPaused)
+{
+    s_scenePaused = aPaused;
+}
+
 void VehicleSystem::OnVehicleEnter(Red::EntityID aVehicle, const Red::TweakDBID& aVehicleTdbid, Red::CName aName, const Red::Vector4& aPostion, const Red::Quaternion& aOrientation)
 {
     spdlog::info("[VehicleSystem] OnVehicleEnter");
+    m_enterSkipped = s_scenePaused;
+    if (m_enterSkipped)
+        return;
+
     const auto pNetworkService = Core::Container::Get<NetworkService>();
     if (!pNetworkService->IsConnected())
         return;
@@ -99,6 +113,11 @@ void VehicleSystem::OnVehicleExit()
     m_vehicleRemoteId = std::nullopt;
 
     spdlog::info("[VehicleSystem] OnVehicleExit");
+    if (m_enterSkipped)
+    {
+        m_enterSkipped = false;
+        return;
+    }
     const auto pNetworkService = Core::Container::Get<NetworkService>();
     if (!pNetworkService->IsConnected())
         return;

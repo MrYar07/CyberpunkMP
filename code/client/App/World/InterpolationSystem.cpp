@@ -32,6 +32,14 @@ constexpr float kSceneReach = 1.5f;
 constexpr float kSceneGap = 1.2f;
 
 std::atomic_bool s_sceneSpacing{false};
+std::mutex s_heldLock;
+std::unordered_set<uint64_t> s_held;
+
+bool IsHeld(uint64_t aEntityHash)
+{
+    std::lock_guard _(s_heldLock);
+    return s_held.contains(aEntityHash);
+}
 glm::vec3 s_sceneAnchor{};
 float s_sceneYaw{0.f};
 
@@ -92,6 +100,9 @@ void InterpolateEntity(flecs::entity aEntity, const EntityComponent& aEntityComp
         return;
 
     if (aEntity.has<AttachedComponent>())
+        return;
+
+    if (IsHeld(aEntityComponent.Id.hash))
         return;
 
     const glm::vec3 position{Lerp(first.Position, second.Position, ratio)};
@@ -157,6 +168,15 @@ void InterpolationSystem::SetSceneSpacing(bool aEnabled, const glm::vec3& aAncho
     s_sceneAnchor = aAnchor;
     s_sceneYaw = aYaw;
     s_sceneSpacing = aEnabled;
+}
+
+void InterpolationSystem::SetHeld(uint64_t aEntityHash, bool aHeld)
+{
+    std::lock_guard _(s_heldLock);
+    if (aHeld)
+        s_held.insert(aEntityHash);
+    else
+        s_held.erase(aEntityHash);
 }
 
 void InterpolationSystem::OnWorldAttached(RED4ext::world::RuntimeScene* aScene)

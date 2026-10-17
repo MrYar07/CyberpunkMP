@@ -521,6 +521,26 @@ void NetworkWorldSystem::SetSceneSpacing(bool aEnabled, const Red::Vector4& aAnc
     InterpolationSystem::SetSceneSpacing(aEnabled, glm::vec3{aAnchor.X, aAnchor.Y, aAnchor.Z}, yaw);
 }
 
+void NetworkWorldSystem::SetPuppetHeld(Red::EntityID aEntity, bool aHeld)
+{
+    InterpolationSystem::SetHeld(aEntity.hash, aHeld);
+}
+
+void NetworkWorldSystem::SetVehicleSyncPaused(bool aPaused)
+{
+    VehicleSystem::SetScenePaused(aPaused);
+}
+
+Red::CString NetworkWorldSystem::FindSceneSpots(const Red::Handle<Red::world::StreamingSector>& aSector, const Red::Vector4& aCenter, float aRadius)
+{
+    return SceneSpots::Find(aSector, aCenter, aRadius);
+}
+
+Red::NodeRef NetworkWorldSystem::NodeRefFromNumber(uint64_t aValue) const
+{
+    return Red::NodeRef(aValue);
+}
+
 bool NetworkWorldSystem::IsConnected() const
 {
     const auto pNetworkService = Core::Container::Get<NetworkService>();

@@ -52,7 +52,7 @@ podbierania pojedynczych poprawek.
 | Pozycja, wygląd, pojazdy | To, co już robi CyberpunkMP. |
 | Dialogi | Głosowanie wszystkich graczy w świecie, wybór robi gra hosta (niżej, „Dialogi i sceny”). |
 | Sceny, holorozmowy, telefony, zmiany świata | Gra gościa uruchamia te same węzły questów co gra hosta (`QuestMirror`, niżej „Sceny u gości”), więc gość widzi cutscenki swoim V i słyszy rozmowy. |
-| Pozycje w scenach | Każda gra pokazuje swoje V w miejscu V ze sceny; postacie pozostałych graczy stają obok (rozsuwanie w interpolacji). |
+| Pozycje w scenach | Każda gra pokazuje swoje V w miejscu V ze sceny; postacie pozostałych graczy są w niej statystami: w aucie na wolnych miejscach, gdy V siedzi — na wolnych krzesłach/stołkach obok, inaczej na miejscu do stania z gestem albo półkolem obok V, twarzą do mówiącego (niżej „Inni gracze jako statyści”). |
 
 ### Przebieg sesji
 
@@ -233,6 +233,39 @@ Ograniczenia i niewiadome (do fazy testowej): czy węzeł sceny wykonany poza sw
 odtwarza scenę; czy NPC i obiekty z prefabów faz (ładowanych tylko przy aktywnej fazie)
 istnieją u gościa; czy wybudzenia węzła sceny nie są zgłaszane jako nowy start; siedzenie
 innych graczy obok (workspoty) — na razie stoją.
+
+## Inni gracze jako statyści (etap 4c)
+
+Zasada: każdy gracz widzi cutscenkę jako bohater (4b), a pozostali gracze są w niej
+dodatkowymi NPC, którzy robią coś pasującego. Każda gra robi to u siebie, osobno dla
+swoich kukieł innych graczy (`Plugins/CampaignExtras.reds`), dopóki trwa scena (Tier3+):
+
+- **V w aucie** → kukły na wolnych miejscach tego auta (`seat_front_right`,
+  `seat_back_left`, `seat_back_right`, `seat_front_left`; `MountAIEvent` jak w CyberpunkMP).
+  Na czas sceny wsiadanie do auta nie idzie na serwer
+  (`NetworkWorldSystem.SetVehicleSyncPaused`), bo każda gra ma własną kopię auta ze sceny.
+- **V siedzi** (workspot) → najbliższe wolne miejsca do siedzenia w promieniu 8 m
+  (`AIUseWorkspotCommand` na miejscu AI świata).
+- **V stoi** → miejsce do stania z gestem w promieniu 5 m (oparcie o bar, ścianę, barierkę,
+  palenie itp.), a gdy brak — półkole 1,6 m obok i za V, twarzą do mówiącego NPC (z napisów,
+  `BaseSubtitlesGameController.SpawnDialogLine`).
+- Zmiana (V wsiada, siada, wstaje) → wszyscy przestawiani od nowa; koniec sceny → kukły
+  puszczone, znów idą za swoimi graczami. Postawione kukły nie są przesuwane przez
+  interpolację (`SetPuppetHeld`).
+
+Wolne miejsca: sektory świata wczytane wokół gracza (zdarzenie Codeware `Resource/Ready`,
+do 256 ostatnich) → natywne `FindSceneSpots` przegląda węzły sektora (układ z Codeware) i
+zwraca miejsca AI (`worldAISpotNode` → `AIActionSpot`), których workspot jest na liście
+`code/client/App/World/SceneSpotsData.inl`: 142 pozy siedzące i 194 stojące archetypu
+`generic` (bez broni, strażników, obsługi baru), z nazw plików gry. Lista generowana przez
+`tools/campaign/extract_workspots.py` z listingu WolvenKit
+(`WolvenKit.CLI archive <archive\pc\content> <archive\pc\ep1> -l -w "*.workspot"`).
+
+Ograniczenia (do fazy testowej): czy kukły CyberpunkMP (AI z rekordu `MaMuppet`/`WaMuppet`)
+przyjmują `AIUseWorkspotCommand` i montaż do auta ze sceny; zajętość miejsc przez NPC nie
+jest sprawdzana (tylko przez innych graczy i V); wysiadanie przez `AIEvent ExitVehicle`
+(CyberpunkMP notuje, że czasem psuje orientację); ręcznie dopracowane pozy dla kluczowych
+scen — etap 6.
 
 Ograniczenia dialogów: wstrzykiwane są domyślne klawisze (strzałki, F), więc przy zmienionym
 przypisaniu `UI_MoveUp/Down` lub `DialogConfirm` na strzałki/F wybór nie zadziała; blokada
