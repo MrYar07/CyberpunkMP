@@ -66,6 +66,7 @@ public class CampaignLobby extends ScriptableService {
 
     // ---- starting the game ----
     private let m_menu: wref<SingleplayerMenuGameController>;
+    private let m_lifePathMenu: wref<CharacterCreationBackstorySelectionMenu>;
     private let m_beginPending: Bool;
     private let m_beginMode: Int32;
     private let m_beginIsHost: Bool;
@@ -187,6 +188,7 @@ public class CampaignLobby extends ScriptableService {
             ArrayPush(this.m_voteCounts, 0);
         }
         this.RefreshMenu();
+        this.RefreshLifePathMenu();
     }
 
     public func OnVoteTally(voteId: Uint32, counts: String) -> Void {
@@ -198,6 +200,7 @@ public class CampaignLobby extends ScriptableService {
             ArrayPush(this.m_voteCounts, StringToInt(count));
         }
         this.RefreshMenu();
+        this.RefreshLifePathMenu();
     }
 
     public func OnVoteClosed(voteId: Uint32, winner: Int32) -> Void {
@@ -207,8 +210,64 @@ public class CampaignLobby extends ScriptableService {
         this.m_voteOpen = false;
         if winner >= 0 && winner < ArraySize(this.m_voteOptions) {
             LogChannel(n"DEBUG", s"[Campaign] vote '\(this.m_voteKind)' won by \(this.m_voteOptions[winner])");
+
+            // Everyone's lifepath screen moves on with the winner.
+            if Equals(this.m_voteKind, "lifepath") {
+                this.m_lifePath = this.m_voteOptions[winner];
+                if IsDefined(this.m_lifePathMenu) {
+                    this.m_lifePathMenu.CampaignAcceptLifePath(this.m_lifePath);
+                }
+            }
         }
         this.RefreshMenu();
+    }
+
+    // ---- the lifepath screen ----
+
+    public func SetLifePathMenu(menu: ref<CharacterCreationBackstorySelectionMenu>) -> Void {
+        this.m_lifePathMenu = menu;
+    }
+
+    private func RefreshLifePathMenu() -> Void {
+        if IsDefined(this.m_lifePathMenu) {
+            this.m_lifePathMenu.CampaignUpdateVoteLabels();
+        }
+    }
+
+    // While it is open, a click on a lifepath is a vote rather than a choice.
+    public func IsLifePathVoting() -> Bool {
+        return this.m_creating && this.m_voteOpen && Equals(this.m_voteKind, "lifepath");
+    }
+
+    public func VoteLifePath(lifePath: String) -> Void {
+        let i = 0;
+        while i < ArraySize(this.m_voteOptions) {
+            if Equals(this.m_voteOptions[i], lifePath) {
+                this.Vote(i);
+                return;
+            }
+            i += 1;
+        }
+    }
+
+    // "1/2" under each lifepath while voting (votes / players), the winner once decided.
+    public func LifePathVoteLabel(lifePath: String) -> String {
+        if this.IsLifePathVoting() {
+            let i = 0;
+            while i < ArraySize(this.m_voteOptions) {
+                if Equals(this.m_voteOptions[i], lifePath) {
+                    let count = i < ArraySize(this.m_voteCounts) ? this.m_voteCounts[i] : 0;
+                    let mine = this.m_myVote == i ? "  <" : "";
+                    return s"\(count)/\(ArraySize(this.m_players))\(mine)";
+                }
+                i += 1;
+            }
+            return "";
+        }
+        if this.m_creating && Equals(this.m_lifePath, lifePath) {
+            return "SELECTED";
+        }
+        return "";
     }
 
     // Parts with the same key are joined: long values arrive in pieces.
@@ -765,13 +824,7 @@ private func PopulateMenuItemList() -> Void {
     // In the lobby the game is started by the lobby, so Continue / New Game / Load Game
     // are not offered: they would start a game nobody else is in.
     let phase = lobby.GetPhase();
-    if lobby.IsVoting() {
-        let i = 0;
-        while i < lobby.GetVoteOptionCount() {
-            this.AddMenuItem(lobby.GetVoteLabel(i), StringToName(s"OnCampaignVote\(i)"));
-            i += 1;
-        }
-    } else if Equals(phase, "started") {
+    if Equals(phase, "started") {
         this.AddMenuItem("CO-OP: JOIN THE CAMPAIGN", n"OnCampaignResume");
     } else if lobby.IsHost() {
         this.AddMenuItem(lobby.GetMode() == 1 ? "CO-OP: NEW CAMPAIGN  <" : "CO-OP: NEW CAMPAIGN", n"OnCampaignNew");
@@ -810,10 +863,6 @@ protected func HandleMenuItemActivate(data: ref<PauseMenuListItemData>) -> Bool 
         case n"OnCampaignNew": lobby.ChooseNew(); return true;
         case n"OnCampaignLoad": lobby.ChooseNextSaved(); return true;
         case n"OnCampaignStart": lobby.Start(); return true;
-        case n"OnCampaignVote0": lobby.Vote(0); return true;
-        case n"OnCampaignVote1": lobby.Vote(1); return true;
-        case n"OnCampaignVote2": lobby.Vote(2); return true;
-        case n"OnCampaignVote3": lobby.Vote(3); return true;
         case n"OnCampaignResume": lobby.Resume(); return true;
         default: break;
     }
@@ -875,9 +924,92 @@ public func CampaignStartGuest(found: Bool) -> Void {
 
 // ---- character creation ----
 
+// The lifepath vote happens on the game's own lifepath screen: a click is a vote (it can be
+// changed), each tile shows "votes/players", and when the vote closes every player's
+// screen takes the winner and moves on.
+
+@addField(CharacterCreationBackstorySelectionMenu)
+let m_campaignVoteLabels: array<wref<inkText>>;
+
+@wrapMethod(CharacterCreationBackstorySelectionMenu)
+protected cb func OnInitialize() -> Bool {
+    let result = wrappedMethod();
+    let lobby = CampaignLobby.Get();
+    if IsDefined(lobby) && lobby.IsCreating() {
+        lobby.SetLifePathMenu(this);
+        // Same order as the server's options: Corporate, Nomad, StreetKid.
+        ArrayPush(this.m_campaignVoteLabels, this.CampaignAddVoteLabel(inkWidgetRef.Get(this.m_corpo)));
+        ArrayPush(this.m_campaignVoteLabels, this.CampaignAddVoteLabel(inkWidgetRef.Get(this.m_nomad)));
+        ArrayPush(this.m_campaignVoteLabels, this.CampaignAddVoteLabel(inkWidgetRef.Get(this.m_streetRat)));
+        this.CampaignUpdateVoteLabels();
+    }
+    return result;
+}
+
+@addMethod(CharacterCreationBackstorySelectionMenu)
+private func CampaignAddVoteLabel(tile: wref<inkWidget>) -> wref<inkText> {
+    let parent = tile as inkCompoundWidget;
+    if !IsDefined(parent) {
+        LogChannel(n"DEBUG", "[Campaign] lifepath tile is not a compound widget, no vote counter");
+        return null;
+    }
+    let text = new inkText();
+    text.SetName(n"campaign_vote_count");
+    text.SetAnchor(inkEAnchor.BottomCenter);
+    text.SetAnchorPoint(0.5, 1.0);
+    text.SetMargin(new inkMargin(0.0, 0.0, 0.0, 40.0));
+    text.SetFitToContent(true);
+    text.SetFontFamily("base\\gameplay\\gui\\fonts\\raj\\raj.inkfontfamily");
+    text.SetFontStyle(n"Medium");
+    text.SetFontSize(64);
+    text.SetHorizontalAlignment(textHorizontalAlignment.Center);
+    text.SetTintColor(new HDRColor(2.0, 1.75, 0.25, 1.0));
+    text.SetAffectsLayoutWhenHidden(false);
+    text.Reparent(parent);
+    return text;
+}
+
+@addMethod(CharacterCreationBackstorySelectionMenu)
+public func CampaignUpdateVoteLabels() -> Void {
+    let lobby = CampaignLobby.Get();
+    let lifePaths = ["LifePaths.Corporate", "LifePaths.Nomad", "LifePaths.StreetKid"];
+    let i = 0;
+    while i < ArraySize(this.m_campaignVoteLabels) {
+        let label = this.m_campaignVoteLabels[i];
+        if IsDefined(label) {
+            label.SetText(lobby.LifePathVoteLabel(lifePaths[i]));
+        }
+        i += 1;
+    }
+}
+
+@addMethod(CharacterCreationBackstorySelectionMenu)
+public func CampaignAcceptLifePath(lifePath: String) -> Void {
+    this.CampaignUpdateVoteLabels();
+    this.m_characterCustomizationState.SetLifePath(TDBID.Create(lifePath));
+    this.m_eventDispatcher.SpawnEvent(n"OnAccept");
+}
+
+@addMethod(CharacterCreationBackstorySelectionMenu)
+private func CampaignLifePathClick(e: ref<inkPointerEvent>, lifePath: String) -> Bool {
+    let lobby = CampaignLobby.Get();
+    if !IsDefined(lobby) {
+        return false;
+    }
+    if lobby.IsLifePathVoting() {
+        if e.IsAction(n"click") {
+            this.PlaySound(n"Button", n"OnPress");
+            lobby.VoteLifePath(lifePath);
+        }
+        return true;
+    }
+    // Decided already (a late arrival): only the winner can be picked.
+    return lobby.BlocksLifePath(lifePath);
+}
+
 @wrapMethod(CharacterCreationBackstorySelectionMenu)
 protected cb func OnReleaseNomad(e: ref<inkPointerEvent>) -> Bool {
-    if CampaignLobby.Get().BlocksLifePath("LifePaths.Nomad") {
+    if this.CampaignLifePathClick(e, "LifePaths.Nomad") {
         return false;
     }
     return wrappedMethod(e);
@@ -885,7 +1017,7 @@ protected cb func OnReleaseNomad(e: ref<inkPointerEvent>) -> Bool {
 
 @wrapMethod(CharacterCreationBackstorySelectionMenu)
 protected cb func OnReleaseStreet(e: ref<inkPointerEvent>) -> Bool {
-    if CampaignLobby.Get().BlocksLifePath("LifePaths.StreetKid") {
+    if this.CampaignLifePathClick(e, "LifePaths.StreetKid") {
         return false;
     }
     return wrappedMethod(e);
@@ -893,7 +1025,7 @@ protected cb func OnReleaseStreet(e: ref<inkPointerEvent>) -> Bool {
 
 @wrapMethod(CharacterCreationBackstorySelectionMenu)
 protected cb func OnReleaseCorpo(e: ref<inkPointerEvent>) -> Bool {
-    if CampaignLobby.Get().BlocksLifePath("LifePaths.Corporate") {
+    if this.CampaignLifePathClick(e, "LifePaths.Corporate") {
         return false;
     }
     return wrappedMethod(e);

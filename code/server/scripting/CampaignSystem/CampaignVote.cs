@@ -5,6 +5,8 @@ namespace CampaignSystem
     // One vote among the connected players: every player has one vote and can change it until
     // the time runs out. Most votes wins; a tie is drawn at random among the tied options.
     // With no votes at all, the fallback decides (the host's own choice, or a random option).
+    // A vote can wait for its first ballot before the clock starts (the lifepath vote: players
+    // reach that screen at their own pace).
     internal class CampaignVote
     {
         private static uint nextId = 1;
@@ -13,14 +15,16 @@ namespace CampaignSystem
         private readonly Func<int> fallback;
         private readonly Action<int> onClosed;
         private float remaining;
+        private readonly bool clockOnFirstVote;
 
         internal uint Id { get; }
         internal string Kind { get; }
         internal IReadOnlyList<string> Options { get; }
         internal bool Closed { get; private set; }
 
-        internal CampaignVote(string kind, IReadOnlyList<string> options, float seconds, Func<int> fallback, Action<int> onClosed)
+        internal CampaignVote(string kind, IReadOnlyList<string> options, float seconds, Func<int> fallback, Action<int> onClosed, bool clockOnFirstVote = false)
         {
+            this.clockOnFirstVote = clockOnFirstVote;
             Id = nextId++;
             Kind = kind;
             Options = options;
@@ -73,8 +77,10 @@ namespace CampaignSystem
             if (Closed)
                 return;
 
-            remaining -= delta;
-            if (remaining <= 0 || Everyone(players))
+            if (!clockOnFirstVote || votes.Count > 0)
+                remaining -= delta;
+
+            if (remaining <= 0 || (votes.Count > 0 && Everyone(players)))
                 Close(players);
         }
 

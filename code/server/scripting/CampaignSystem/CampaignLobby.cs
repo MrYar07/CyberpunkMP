@@ -97,10 +97,11 @@ namespace CampaignSystem
 
             Broadcast();
 
-            if (phase == LobbyPhase.Voting)
-                vote?.OpenFor(playerId);
-            else if (phase == LobbyPhase.Started)
+            if (phase == LobbyPhase.Started)
+            {
                 Begin(playerId);
+                vote?.OpenFor(playerId);
+            }
         }
 
         internal void Leave(ulong playerId)
@@ -180,7 +181,7 @@ namespace CampaignSystem
             switch (mode)
             {
                 case LobbyMode.NewGame:
-                    StartLifePathVote();
+                    StartNewCampaign();
                     break;
                 case LobbyMode.LoadGame:
                     campaign = store.Load(chosenCampaign);
@@ -286,31 +287,36 @@ namespace CampaignSystem
 
         // ---- internals ----
 
-        private void StartLifePathVote()
+        // Everyone goes into the game's own New Game flow at once. The lifepath is voted on
+        // the lifepath screen itself: a click there is a vote, and the screen moves on for
+        // everybody when the vote closes.
+        private void StartNewCampaign()
         {
-            phase = LobbyPhase.Voting;
+            var host = HostId is { } id ? Find(id)?.Name ?? "" : "";
+            campaign = new CampaignFile
+            {
+                Name = CampaignStore.SafeName($"{host}-{DateTime.Now:yyyyMMdd-HHmm}"),
+                Host = host,
+                Created = DateTime.UtcNow,
+            };
+            store.Save(campaign);
+            logger.Info($"New campaign '{campaign.Name}'");
 
-            // Nobody voted: the host's game would have to pick anyway, so pick for it.
+            // Only cast votes can close it early, so the clock waits for the first one.
+            var started = campaign;
             vote = new CampaignVote("lifepath", LifePaths, VoteSeconds,
                 () => Random.Shared.Next(LifePaths.Length),
                 winner =>
                 {
-                    var host = HostId is { } id ? Find(id)?.Name ?? "" : "";
-                    campaign = new CampaignFile
-                    {
-                        Name = CampaignStore.SafeName($"{host}-{DateTime.Now:yyyyMMdd-HHmm}"),
-                        Host = host,
-                        LifePath = LifePaths[winner],
-                        Created = DateTime.UtcNow,
-                    };
-                    store.Save(campaign);
-
-                    logger.Info($"Lifepath vote: {LifePaths[winner]}, new campaign '{campaign.Name}'");
+                    started.LifePath = LifePaths[winner];
+                    store.Save(started);
+                    logger.Info($"Lifepath vote: {LifePaths[winner]}");
                     vote = null;
-                    BeginAll();
-                });
+                    Broadcast();
+                },
+                clockOnFirstVote: true);
 
-            Broadcast();
+            BeginAll();
             vote.Open(PlayerIds);
         }
 
