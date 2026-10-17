@@ -1,0 +1,36 @@
+CYBERPUNK 2077 - CO-OP CAMPAIGN (do 4 graczy)
+==============================================
+
+WYMAGANIA
+- Cyberpunk 2077 w wersji 2.31 (Steam), z dodatkiem Phantom Liberty.
+- Steam włączony (zaproszenia i połączenie idą przez Steam - bez otwierania portów).
+- Do HOSTOWANIA dodatkowo .NET 8 Runtime (instalator zapyta i może go doinstalować).
+
+INSTALACJA
+1. Zamknij grę.
+2. Uruchom CyberpunkCoopSetup.exe (albo rozpakuj zip i uruchom install.bat).
+   Windows może pokazać ostrzeżenie SmartScreen ("nieznany wydawca") -
+   kliknij "Więcej informacji" -> "Uruchom mimo to".
+3. Instalator sam znajdzie grę, zainstaluje mod i potrzebne biblioteki
+   (RED4ext, redscript, Codeware, ArchiveXL, TweakXL, Input Loader),
+   zrobi kopię zapasową podmienianych plików i doda skrót na pulpicie.
+
+JAK GRAĆ
+- Grę uruchamiaj skrótem "Cyberpunk 2077 Co-op" z pulpitu.
+- Dołączanie: przyjmij zaproszenie od hosta w Steam (gra uruchomi się sama
+  i wejdzie do lobby) albo kliknij "Dołącz do gry" przy jego nicku na liście znajomych.
+- Hostowanie: w menu głównym CO-OP: HOST CAMPAIGN, potem CO-OP: INVITE STEAM FRIEND.
+- W lobby: host wybiera NEW CAMPAIGN albo zapisaną kampanię, goście klikają READY,
+  host START. O ścieżce życia i opcjach dialogowych wszyscy głosują.
+- Powalony gracz ma 45 sekund - podejdź do niego i postój chwilę obok, żeby go podnieść.
+
+ODINSTALOWANIE
+- W folderze gry uruchom Odinstaluj-CyberpunkCoop.bat (przywraca poprzednie pliki,
+  zapisy kampanii zostają w CyberpunkCoop_saved_campaigns).
+
+UWAGI
+- Używasz Vortexa? Może zgłosić zmiany w folderze gry - to pliki tego moda, można je zostawić.
+- Jeśli masz już nowsze wersje bibliotek (np. z Vortexa), instalator ich nie podmienia.
+- Licencje dołączonych bibliotek: LICENSES.txt.
+- To wersja testowa - jeśli coś nie działa, wyślij plik
+  <gra>\red4ext\plugins\zzzCyberpunkMP\CyberpunkMP.log
