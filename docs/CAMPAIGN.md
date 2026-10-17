@@ -6,14 +6,40 @@ Online (świat-szablon, blokada zapisów, czysty start bez questów) celowo NIE 
 wciągnięte — są przeciwieństwem trybu fabularnego. Ich repo jest pod remote `nco`, do
 podbierania pojedynczych poprawek.
 
+## Jak grać
+
+1. Każdy gracz uruchamia grę z `-online -ip <adres> -port <port> -username <nazwa>`.
+   Nazwa wiąże gracza z jego postacią w zapisie kampanii, więc trzeba używać tej samej.
+2. W menu głównym: **CO-OP CAMPAIGN** łączy z serwerem i otwiera lobby (panel po prawej:
+   host, wybór, gracze). Pierwszy gracz w lobby jest hostem.
+3. Host wybiera **NEW CAMPAIGN** albo **LOAD <nazwa>** (kolejne kliknięcia przełączają
+   zapisane kampanie), goście klikają **READY**, host **START**.
+4. Nowa kampania: głosowanie nad ścieżką życia (pozycje **VOTE: …** w menu). Potem
+   każdy przechodzi kreator postaci — wybrać da się tylko wygraną ścieżkę życia. Host gra
+   normalny start (przycisk gry podstawowej), goście start „Phantom Liberty”, który mod
+   podmienia na pusty świat bez questów (patrz niżej).
+5. Wczytanie kampanii: host wczytuje swój zapis gry w zwykłym menu „Wczytaj”. Goście
+   dostają swoją postać z zapisu kampanii (wygląd, poziom, atrybuty, perki, punkty,
+   pieniądze, przedmioty); kto jej nie ma, tworzy nową.
+6. Po powrocie do menu w trakcie kampanii: **JOIN THE CAMPAIGN** (host — wczytanie
+   zapisu, gość — postać z kampanii).
+
 ## Model: host jest autorytetem
 
-- **Host** to pierwszy gracz, który wejdzie na serwer. Jego gra uruchamia questy, sceny
+- **Host** to pierwszy gracz, który wejdzie do lobby. Jego gra uruchamia questy, sceny
   i dialogi, a jego zapis gry jest zapisem kampanii.
 - **Goście** odbijają stan hosta. Serwer przechowuje ostatni stan zgłoszony przez hosta,
   więc gracz, który dołączy później, dostaje cały stan od razu.
-- Kiedy host wyjdzie, fabuła stoi do czasu, aż wejdzie nowy host. Nowy host zaczyna od
-  czystego stanu na serwerze i wysyła własny zrzut.
+- Kiedy host wyjdzie przed startem, hostem zostaje następny gracz z lobby. Po starcie
+  kampanii fabuła stoi, aż wróci ten sam host (po nazwie) — tylko jego zapis gry ma
+  fabułę. Zrzut stanu jest wysyłany od nowa za każdym wejściem hosta do świata.
+- **Goście nie uruchamiają własnych questów.** Działającego questa nie da się zatrzymać,
+  można tylko nie dopuścić do jego startu. Dlatego goście startują z
+  `ep1\quest\ep1_standalone.gamedef` podmienionego przez archiwum
+  `zz_CampaignCoop_GuestStart.archive` (czysty start z Night City Online, `nco 9e1832f`,
+  sprawdzony w grze): Night City bez prologu, świat EP1 bez fabuły, bez questów w
+  dzienniku. Koszt: z modem przycisk „Phantom Liberty” w nowej grze zawsze daje ten pusty
+  start; gość potrzebuje zainstalowanego Phantom Liberty.
 
 ## Co jest zsynchronizowane
 
@@ -25,8 +51,9 @@ podbierania pojedynczych poprawek.
 
 ### Przebieg sesji
 
-1. Pierwszy gracz zostaje hostem: `SetRole(true)`, potem lista faktów w paczkach
-   `WatchFacts(nazwy, last)`.
+1. Klient zgłasza wejście do świata (`EnterWorld`; wyjście: `LeaveWorld`). Host dostaje
+   `SetRole(true)`, potem listę faktów w paczkach `WatchFacts(nazwy, last)`; gość
+   `SetRole(false)`.
 2. Host wysyła zrzut dziennika i faktów (`ReportJournalBatch`, `ReportFactBatch`), a po
    ostatniej paczce `ReportSnapshotDone`.
 3. Dopiero wtedy serwer wysyła pełny stan gościom (`ApplyJournalBatch`, `ApplyFactBatch`).
@@ -55,11 +82,35 @@ python tools/campaign/extract_facts.py --game "<Cyberpunk 2077>" ^
 Zmiany lokalne na serwerze: `config/campaign_facts.txt` — `nazwa` dodaje fakt,
 `-nazwa` go usuwa.
 
+## Lobby i zapis kampanii
+
+- Połączenie z serwerem działa w menu głównym. Zmiany w rdzeniu CyberpunkMP (minimalne):
+  nazwa gracza z `-username` (wcześniej na sztywno `testuser`), autoryzacja bez świata —
+  postać na serwerze powstaje dopiero, gdy jest gracz w świecie, i powstaje od nowa po
+  przeładowaniu świata (serwer usuwa wtedy starą kukłę), natywy dla skryptu
+  (`IsEnabled`, `IsConnected`, `GetUsername`, `Export/ImportCustomizationState`,
+  `TweakDBIDFromNumber`).
+- Stan lobby trzyma serwer (`CampaignLobby.cs`) i wysyła go w całości jednym stringiem
+  (`LobbyState`) przy każdej zmianie. Klient trzyma go w serwisie Codeware
+  `CampaignLobby` (żyje w menu i w grze, w przeciwieństwie do ScriptableSystemów).
+- Głosowanie (`CampaignVote.cs`): wspólne dla ścieżki życia i (etap 4) dialogów. RPC
+  `VoteOpened`/`VoteTally`/`VoteClosed`, głos `CastVote`. Kończy się po 15 s albo gdy
+  zagłosują wszyscy.
+- Zapis kampanii: `campaigns/<nazwa>.json` obok serwera (nazwa: `<host>-<data>`). Pola:
+  `Host`, `LifePath`, `Players[nazwa]` = słownik pól postaci od klienta. Klient wysyła
+  postać co 2 minuty gry (`ReportCharacterPart` + `ReportCharacterDone`, długie pola w
+  kawałkach po 15 000 znaków), a wygląd od razu po kreatorze. Przy wczytaniu dostaje ją z
+  powrotem (`RequestCharacter` → `CharacterPart`… → `CharacterDone`).
+- Pola postaci: `appearance` (stan kreatora, base64), `level`, `streetcred`,
+  `attributes`, `points` (niewydane punkty), `perks`, `money`, `items` (id rekordu
+  TweakDB jako liczba: ilość). Jeszcze nie: założone przedmioty, modyfikacje i jakość
+  przedmiotów, sloty cyberwszczepów.
+
 ## Znane ograniczenia
 
-- Goście nadal mają własne grafy questów. Jeśli gość wczyta zapis z innego miejsca
-  fabuły, jego gra może sama posuwać questy. Na razie: gość wczytuje zapis sprzed tego
-  samego questa co host. Wyciszenie questów u gości to etap 3.
+- Fakty od hosta trafiają do świata gościa, w którym działa korzeń bazowej gry
+  (`cyberpunk2077_ep1_standalone.quest`). Jeśli jakaś faza czeka na fakt, który host
+  ustawi, może ruszyć u gościa. Do sprawdzenia w fazie testowej.
 - Host rejestruje kilka tysięcy listenerów faktów naraz. Jeśli to okaże się za drogie,
   zamiennikiem jest natywny hook zapisu FactsDB (RED4ext).
 - NPC, walka, sceny i dialogi nie są synchronizowane.
@@ -70,9 +121,9 @@ Zmiany lokalne na serwerze: `config/campaign_facts.txt` — `nazwa` dodaje fakt,
    spóźnionych graczy.
 2. **Lista faktów z gry** (zrobione): nazwy faktów z grafów questów i scen (WolvenKit CLI),
    paczkowanie RPC.
-3. **Lobby, zapis kampanii i wspólny start** (szczegóły niżej): gracze zbierają się w
-   lobby, host wybiera nową grę albo wczytanie kampanii. Goście nie uruchamiają własnych
-   questów, tylko wchodzą do świata hosta.
+3. **Lobby, zapis kampanii i wspólny start** (zrobione): gracze zbierają się w lobby w
+   menu głównym, host wybiera nową grę albo wczytanie kampanii, głosowanie nad ścieżką
+   życia, goście startują w świecie bez questów, postacie gości w zapisie kampanii.
 4. **Sceny i dialogi**: przy starcie sceny u hosta goście są przenoszeni do niego i
    oglądają. **O opcjach dialogowych gracze głosują** (zasady niżej), wynik wybiera gra
    hosta.
@@ -80,7 +131,7 @@ Zmiany lokalne na serwerze: `config/campaign_facts.txt` — `nazwa` dodaje fakt,
 6. **Przejście kampanii misja po misji**, potem Phantom Liberty. Łatki na sceny, które
    zakładają jednego V (Johnny, braindance, Songbird).
 
-### Lobby (etap 3)
+### Lobby (etap 3, zrobione — opis działania wyżej w „Jak grać” i „Lobby i zapis kampanii”)
 
 - Serwer trzyma stan lobby: lista graczy, gotowość, kto jest hostem, wybór hosta.
 - Host wybiera:

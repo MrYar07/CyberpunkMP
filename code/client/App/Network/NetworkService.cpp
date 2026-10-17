@@ -6,6 +6,7 @@
 #include "RED4ext/Scripting/Natives/Generated/game/Object.hpp"
 #include "App/World/AppearanceSystem.h"
 #include "Game/CharacterCustomizationSystem.h"
+#include "App/Settings.h"
 
 NetworkService::NetworkService()
     : Client(client::kIdentifier, server::kIdentifier)
@@ -40,7 +41,7 @@ void NetworkService::OnConnected()
 
     client::AuthenticationRequest request;
     request.set_token("test");
-    request.set_username("testuser");
+    request.set_username(Settings::Get().username);
     request.set_client_protocol(client::kIdentifier);
     request.set_server_protocol(server::kIdentifier);
 
@@ -53,11 +54,14 @@ void NetworkService::OnDisconnected(EDisconnectReason aReason)
     Red::GetGameSystem<NetworkWorldSystem>()->OnDisconnected(aReason);
 
     m_authenticated = false;
+    m_spawnSent = false;
 }
 
 void NetworkService::OnUpdate()
 {
     m_dispatcher.update();
+
+    TrySpawnCharacter();
 
     Red::GetGameSystem<NetworkWorldSystem>()->Update(GetClock().GetCurrentTick());
 }
@@ -77,15 +81,42 @@ void NetworkService::HandleAuthentication(const PacketEvent<server::Authenticati
     }
 
     m_settings = aResponse.get_settings();
+    m_authenticated = true;
+    m_spawnSent = false;
 
     Red::GetGameSystem<NetworkWorldSystem>()->OnConnected();
 
-    client::SpawnCharacterRequest request;
-    request.set_is_player(true);
+    // Authentication can happen at the main menu (the campaign lobby), where there is no
+    // world and no player yet. The character is spawned once the player exists - here if
+    // we are already in the world, otherwise from OnUpdate.
+    TrySpawnCharacter();
+}
+
+void NetworkService::ResetSpawn()
+{
+    m_spawnSent = false;
+}
+
+void NetworkService::TrySpawnCharacter()
+{
+    if (!m_authenticated || m_spawnSent)
+        return;
+
+    const auto pWorldSystem = Red::GetGameSystem<NetworkWorldSystem>();
+    if (!pWorldSystem || !pWorldSystem->IsReady())
+        return;
 
     const auto system = Red::GetGameSystem<Game::PlayerSystem>();
     Red::Handle<Red::GameObject> player;
     system->GetLocalPlayerControlledGameObject(player);
+
+    if (!player || !player->placedComponent)
+        return;
+
+    m_spawnSent = true;
+
+    client::SpawnCharacterRequest request;
+    request.set_is_player(true);
 
     // Use worldTransform: localTransform is relative and stays near-origin, which made
     // the server spawn our puppet at ~(0, 3.6, 0) instead of our actual world position.
@@ -101,7 +132,7 @@ void NetworkService::HandleAuthentication(const PacketEvent<server::Authenticati
     request.set_rotation(cEntityRotation.z);
     request.set_cookie(0);
 
-    auto appSystem = Red::GetGameSystem<NetworkWorldSystem>()->GetAppearanceSystem();
+    auto appSystem = pWorldSystem->GetAppearanceSystem();
     request.set_equipment(appSystem->GetPlayerItems(player));
 
 

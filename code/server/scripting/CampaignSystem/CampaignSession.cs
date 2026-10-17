@@ -31,6 +31,58 @@ namespace Cyberpunk.Rpc.Server.Plugins
         {
             CampaignSystem.Plugin.Instance.Session.ReportSnapshotDone(playerId);
         }
+
+        public static partial void EnterWorld_Impl(ulong playerId)
+        {
+            CampaignSystem.Plugin.Instance.Session.EnterWorld(playerId);
+        }
+
+        public static partial void LeaveWorld_Impl(ulong playerId)
+        {
+            CampaignSystem.Plugin.Instance.Session.LeaveWorld(playerId);
+        }
+
+        public static partial void LobbySetReady_Impl(ulong playerId, bool ready)
+        {
+            lock (CampaignSystem.CampaignSession.Sync)
+                CampaignSystem.Plugin.Instance.Session.Lobby.SetReady(playerId, ready);
+        }
+
+        public static partial void LobbyChoose_Impl(ulong playerId, int mode, string campaign)
+        {
+            lock (CampaignSystem.CampaignSession.Sync)
+                CampaignSystem.Plugin.Instance.Session.Lobby.Choose(playerId, mode, campaign);
+        }
+
+        public static partial void LobbyStart_Impl(ulong playerId)
+        {
+            lock (CampaignSystem.CampaignSession.Sync)
+                CampaignSystem.Plugin.Instance.Session.Lobby.Start(playerId);
+        }
+
+        public static partial void CastVote_Impl(ulong playerId, uint voteId, int option)
+        {
+            lock (CampaignSystem.CampaignSession.Sync)
+                CampaignSystem.Plugin.Instance.Session.Lobby.CastVote(playerId, voteId, option);
+        }
+
+        public static partial void ReportCharacterPart_Impl(ulong playerId, string key, string value)
+        {
+            lock (CampaignSystem.CampaignSession.Sync)
+                CampaignSystem.Plugin.Instance.Session.Lobby.ReportCharacterPart(playerId, key, value);
+        }
+
+        public static partial void ReportCharacterDone_Impl(ulong playerId)
+        {
+            lock (CampaignSystem.CampaignSession.Sync)
+                CampaignSystem.Plugin.Instance.Session.Lobby.ReportCharacterDone(playerId);
+        }
+
+        public static partial void RequestCharacter_Impl(ulong playerId)
+        {
+            lock (CampaignSystem.CampaignSession.Sync)
+                CampaignSystem.Plugin.Instance.Session.Lobby.RequestCharacter(playerId);
+        }
     }
 }
 
@@ -38,6 +90,9 @@ namespace CampaignSystem
 {
     // One story per server. The host's game runs the quests; this keeps the latest state it
     // reported so every guest - including one that joins late - is brought to the same point.
+    //
+    // Players connect at the main menu (CampaignLobby), so the story is only synced once a
+    // client reports that its world is up (EnterWorld).
     internal class CampaignSession
     {
         private const string FactListFile = "campaign_facts.txt";
@@ -48,14 +103,20 @@ namespace CampaignSystem
         // 64 KB network buffer (strings are limited to 65535 bytes).
         private const int MaxBatchLength = 16000;
 
+        // RPC handlers and the lobby timer share this.
+        internal static readonly object Sync = new();
+
         private readonly Logger logger = new Logger("Campaign");
-        private readonly object sync = new();
+        private readonly object sync = Sync;
 
         private readonly Dictionary<uint, int> journal = new();
         private readonly Dictionary<string, int> facts = new();
         private readonly List<string> watchedFacts;
 
         private ulong? hostId;
+        private bool hostInWorld;
+
+        internal CampaignLobby Lobby { get; }
 
         // Set once the host has sent its whole snapshot. Until then guests are not sent
         // state, because anything missing would be read as "unset" and wipe their facts.
@@ -64,6 +125,8 @@ namespace CampaignSystem
         internal CampaignSession()
         {
             watchedFacts = LoadFactList();
+            Lobby = new CampaignLobby();
+            Lobby.HostChanged += OnHostChanged;
 
             Server.PlayerSystem.PlayerJoinEvent += OnPlayerJoin;
             Server.PlayerSystem.PlayerLeftEvent += OnPlayerLeft;
@@ -75,22 +138,7 @@ namespace CampaignSystem
         {
             lock (sync)
             {
-                if (hostId is null)
-                {
-                    PromoteToHost(playerId);
-                    return;
-                }
-
-                CampaignClient.SetRole(playerId, false);
-
-                if (!snapshotReady)
-                {
-                    logger.Info($"Player {playerId} joined as a guest, waiting for the host's snapshot");
-                    return;
-                }
-
-                logger.Info($"Player {playerId} joined as a guest");
-                SendState(playerId);
+                Lobby.Join(playerId);
             }
         }
 
@@ -98,24 +146,79 @@ namespace CampaignSystem
         {
             lock (sync)
             {
-                if (hostId != playerId)
-                    return;
-
-                // Guests keep the story where it stopped; the next host's game becomes the
-                // source of truth once it reports its own snapshot.
-                logger.Info($"Host {playerId} left, the story is paused until a new host joins");
-                hostId = null;
-                snapshotReady = false;
+                Lobby.Leave(playerId);
             }
+        }
+
+        private void OnHostChanged(ulong? playerId)
+        {
+            // Guests keep the story where it stopped; the next host's game becomes the
+            // source of truth once it reports its own snapshot.
+            if (hostId is not null && playerId is null)
+                logger.Info($"Host {hostId} is gone, the story is paused until a host is back");
+
+            hostId = playerId;
+            hostInWorld = false;
+            snapshotReady = false;
+
+            // The new host may already be in the world (the old host left mid-game).
+            if (playerId is { } id && Lobby.Find(id) is { InWorld: true })
+                EnterWorldLocked(id);
+        }
+
+        internal void EnterWorld(ulong playerId)
+        {
+            lock (sync)
+            {
+                Lobby.SetInWorld(playerId, true);
+                EnterWorldLocked(playerId);
+            }
+        }
+
+        // The client's world went away: loading a save or quitting to the menu.
+        internal void LeaveWorld(ulong playerId)
+        {
+            lock (sync)
+            {
+                Lobby.SetInWorld(playerId, false);
+
+                if (playerId == hostId && hostInWorld)
+                {
+                    logger.Info("The host left the world, the story is paused until they are back");
+                    hostInWorld = false;
+                    snapshotReady = false;
+                }
+            }
+        }
+
+        private void EnterWorldLocked(ulong playerId)
+        {
+            if (playerId == hostId)
+            {
+                PromoteToHost(playerId);
+                return;
+            }
+
+            CampaignClient.SetRole(playerId, false);
+
+            if (!snapshotReady)
+            {
+                logger.Info($"Player {playerId} entered the world as a guest, waiting for the host's snapshot");
+                return;
+            }
+
+            logger.Info($"Player {playerId} entered the world as a guest");
+            SendState(playerId);
         }
 
         private void PromoteToHost(ulong playerId)
         {
-            hostId = playerId;
+            hostInWorld = true;
             snapshotReady = false;
 
-            // A new host means a new source of truth: what the previous host reported may
-            // not match this save, so start clean and let the snapshot refill it.
+            // A new host (or the host after loading a save) is a new source of truth: what
+            // was reported before may not match this save, so start clean and let the
+            // snapshot refill it.
             journal.Clear();
             facts.Clear();
 
@@ -226,9 +329,10 @@ namespace CampaignSystem
             }
         }
 
+        // Guests whose world is up; the rest get the full state when they enter it.
         private IEnumerable<ulong> Guests()
         {
-            return Server.PlayerSystem.PlayerIds.Where(id => id != hostId).ToList();
+            return Lobby.PlayerIds.Where(id => id != hostId && Lobby.Find(id) is { InWorld: true }).ToList();
         }
 
         private static IEnumerable<string> Batches(IEnumerable<string> items)

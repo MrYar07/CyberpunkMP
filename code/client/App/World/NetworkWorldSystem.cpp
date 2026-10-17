@@ -216,6 +216,15 @@ void NetworkWorldSystem::OnAfterWorldDetach()
 
     m_remotePlayerId = std::nullopt;
 
+    // The puppets went down with the world. Forget them without calling DeletePuppet; the
+    // server sends every character again when we spawn into the next world.
+    each([](flecs::entity entity, EntityComponent&) { entity.destruct(); });
+    each([](flecs::entity entity, SpawningComponent&) { entity.destruct(); });
+    App::PuppetRegistry::Clear();
+
+    if (const auto pNetworkService = Core::Container::Get<NetworkService>())
+        pNetworkService->ResetSpawn();
+
     IGameSystem::OnAfterWorldDetach();
 }
 
@@ -453,6 +462,129 @@ void NetworkWorldSystem::Connect()
 void NetworkWorldSystem::Disconnect()
 {
     Core::Container::Get<NetworkService>()->Close();
+}
+
+bool NetworkWorldSystem::IsEnabled() const
+{
+    return !Settings::IsDisabled();
+}
+
+// Saved characters store item ids as numbers; script has no way back from one.
+Red::TweakDBID NetworkWorldSystem::TweakDBIDFromNumber(uint64_t aValue) const
+{
+    return Red::TweakDBID(aValue);
+}
+
+bool NetworkWorldSystem::IsConnected() const
+{
+    const auto pNetworkService = Core::Container::Get<NetworkService>();
+    return pNetworkService && pNetworkService->IsConnected() && pNetworkService->IsAuthenticated();
+}
+
+Red::CString NetworkWorldSystem::GetUsername() const
+{
+    return Settings::Get().username.c_str();
+}
+
+namespace
+{
+constexpr char kBase64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+std::string EncodeBase64(const Vector<uint8_t>& aBytes)
+{
+    std::string out;
+    out.reserve((aBytes.size() + 2) / 3 * 4);
+
+    for (size_t i = 0; i < aBytes.size(); i += 3)
+    {
+        uint32_t chunk = aBytes[i] << 16;
+        if (i + 1 < aBytes.size())
+            chunk |= aBytes[i + 1] << 8;
+        if (i + 2 < aBytes.size())
+            chunk |= aBytes[i + 2];
+
+        out.push_back(kBase64[(chunk >> 18) & 63]);
+        out.push_back(kBase64[(chunk >> 12) & 63]);
+        out.push_back(i + 1 < aBytes.size() ? kBase64[(chunk >> 6) & 63] : '=');
+        out.push_back(i + 2 < aBytes.size() ? kBase64[chunk & 63] : '=');
+    }
+
+    return out;
+}
+
+bool DecodeBase64(std::string_view aText, Vector<uint8_t>& aBytes)
+{
+    uint32_t chunk = 0;
+    int bits = 0;
+
+    for (const char c : aText)
+    {
+        if (c == '=')
+            break;
+
+        const char* pos = std::strchr(kBase64, c);
+        if (!pos || c == 0)
+            return false;
+
+        chunk = (chunk << 6) | static_cast<uint32_t>(pos - kBase64);
+        bits += 6;
+
+        if (bits >= 8)
+        {
+            bits -= 8;
+            aBytes.push_back(static_cast<uint8_t>((chunk >> bits) & 0xFF));
+        }
+    }
+
+    return true;
+}
+}
+
+// The character creator's state, as the same bytes SpawnCharacterRequest carries. Only
+// available while a creator state exists (main menu, character creation) - empty otherwise.
+Red::CString NetworkWorldSystem::ExportCustomizationState() const
+{
+    auto ccSystem = Red::GetGameSystem<Red::game::ui::CharacterCustomizationSystem>();
+    if (!ccSystem)
+        return "";
+
+    auto stateHandle = GetCustomizationState(ccSystem);
+    if (!stateHandle || !stateHandle->instance)
+        return "";
+
+    auto writer = CMPWriter();
+    CharacterCustomizationState_Serialize(stateHandle->instance, &writer);
+
+    return EncodeBase64(writer.bytes).c_str();
+}
+
+// Loads exported bytes into the creator's current state. The caller has to have called
+// InitializeState() first, and FinalizeState() afterwards.
+bool NetworkWorldSystem::ImportCustomizationState(const Red::CString& aData) const
+{
+    Vector<uint8_t> bytes;
+    if (!DecodeBase64(aData.c_str(), bytes) || bytes.empty())
+    {
+        spdlog::error("[Campaign] customization state is not valid base64");
+        return false;
+    }
+
+    auto ccSystem = Red::GetGameSystem<Red::game::ui::CharacterCustomizationSystem>();
+    if (!ccSystem)
+        return false;
+
+    auto stateHandle = GetCustomizationState(ccSystem);
+    if (!stateHandle || !stateHandle->instance)
+    {
+        spdlog::error("[Campaign] no customization state to import into");
+        return false;
+    }
+
+    auto reader = CMPReader(bytes);
+    CharacterCustomizationState_Serialize(stateHandle->instance, &reader);
+
+    spdlog::info("[Campaign] imported {} bytes of customization state", bytes.size());
+    return true;
 }
 
 void NetworkWorldSystem::OnConnected()

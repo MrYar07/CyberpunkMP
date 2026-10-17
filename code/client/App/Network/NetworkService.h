@@ -45,6 +45,10 @@ struct NetworkService final
 
     entt::dispatcher& GetDispatcher() { return m_dispatcher; }
     const server::Settings& GetServerSettings() const { return m_settings; }
+    bool IsAuthenticated() const { return m_authenticated; }
+
+    // The world was torn down (load, quit to menu): spawn the character again in the next one.
+    void ResetSpawn();
 
     TP_NOCOPYMOVE(NetworkService);
 
@@ -58,6 +62,7 @@ protected:
     void OnGameUpdate(RED4ext::CGameApplication* apApp) override;
 
     void HandleAuthentication(const PacketEvent<server::AuthenticationResponse>& aResponse);
+    void TrySpawnCharacter();
 
     static ScratchAllocator& GetScratch();
 
@@ -66,6 +71,7 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> m_lastUpdate;
     bool m_ready = false;
     bool m_authenticated = false;
+    bool m_spawnSent = false;
     bool m_isPaused = false;
     entt::dispatcher m_dispatcher;
     uint64_t m_lastCharacterUpdate{};

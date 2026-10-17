@@ -188,6 +188,11 @@ void Level::HandleSpawnCharacterRequest(PacketEvent<client::SpawnCharacterReques
         rot += glm::vec3(0, 0, 3.1415);
     }
 
+    // A client spawns again after its world reloads (loading a save, the campaign lobby
+    // starting the game). Drop the old puppet so nobody keeps a ghost of it.
+    if (pComponent->Puppet && pComponent->Puppet.is_alive())
+        Remove(pComponent->Puppet);
+
     pComponent->Puppet = GetWorld()->entity()
         .child_of(player)
         .set<MovementComponent>({pos, rot, {}})

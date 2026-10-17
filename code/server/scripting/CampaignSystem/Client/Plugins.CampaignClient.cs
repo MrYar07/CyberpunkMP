@@ -95,5 +95,104 @@ public static class CampaignClient
 		}
 	}
 
+	[ClientRpc(Class = 6609351954351555900, Function = 7731008064371760416)]
+	public static void LobbyState(ulong playerId, string state)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteString(state);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 7731008064371760416, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
+	[ClientRpc(Class = 6609351954351555900, Function = 12808013638763760446)]
+	public static void LobbyBegin(ulong playerId, int mode, string lifePath, bool isHost)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteInt32(mode);
+			data.WriteString(lifePath);
+			data.WriteBool(isHost);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 12808013638763760446, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
+	[ClientRpc(Class = 6609351954351555900, Function = 3548141209181828104)]
+	public static void VoteOpened(ulong playerId, uint voteId, string kind, string options, int seconds)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteUint32(voteId);
+			data.WriteString(kind);
+			data.WriteString(options);
+			data.WriteInt32(seconds);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 3548141209181828104, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
+	[ClientRpc(Class = 6609351954351555900, Function = 2890536480347396026)]
+	public static void VoteTally(ulong playerId, uint voteId, string counts)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteUint32(voteId);
+			data.WriteString(counts);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 2890536480347396026, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
+	[ClientRpc(Class = 6609351954351555900, Function = 12676405126221890873)]
+	public static void VoteClosed(ulong playerId, uint voteId, int winner)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteUint32(voteId);
+			data.WriteInt32(winner);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 12676405126221890873, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
+	[ClientRpc(Class = 6609351954351555900, Function = 4073643341344616630)]
+	public static void CharacterPart(ulong playerId, string key, string value)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteString(key);
+			data.WriteString(value);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 4073643341344616630, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
+	[ClientRpc(Class = 6609351954351555900, Function = 2573610096629192129)]
+	public static void CharacterDone(ulong playerId, bool found)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteBool(found);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 2573610096629192129, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
 }
 }

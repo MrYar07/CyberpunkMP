@@ -22,6 +22,23 @@ void Settings::Load()
             settings.port = std::strtoul((*port)[0].c_str(), nullptr, 10) & 0xFFFF;
     }
 
+    // Players are told apart by name: the campaign plugin keys each guest's character by it.
+    if (const auto username = launchParameters.Get("-username"); username)
+    {
+        if (username->size > 0)
+        {
+            std::string name = (*username)[0].c_str();
+            // Quoted arguments come with the same stray backslashes as -rpcdir.
+            while (!name.empty() && (name.front() == '\\' || name.front() == '"'))
+                name.erase(name.begin());
+            while (!name.empty() && (name.back() == '\\' || name.back() == '"'))
+                name.pop_back();
+
+            if (!name.empty())
+                settings.username = name.c_str();
+        }
+    }
+
     if (const auto mods = launchParameters.Get("-mod"); mods)
     {
         for (const auto& mod : *mods)

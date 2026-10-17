@@ -41,6 +41,15 @@ struct NetworkWorldSystem : RED4ext::IGameSystem, Core::HookingAgent, flecs::wor
 
     void Connect();
     void Disconnect();
+    bool IsReady() const { return m_ready; }
+
+    // Script helpers for the campaign lobby, which runs at the main menu.
+    bool IsEnabled() const;
+    bool IsConnected() const;
+    Red::TweakDBID TweakDBIDFromNumber(uint64_t aValue) const;
+    Red::CString GetUsername() const;
+    Red::CString ExportCustomizationState() const;
+    bool ImportCustomizationState(const Red::CString& aData) const;
     void OnConnected();
     void OnDisconnected(Client::EDisconnectReason);
 
@@ -73,6 +82,12 @@ RTTI_DEFINE_CLASS(NetworkWorldSystem, {
     RTTI_ALIAS("CyberpunkMP.World.NetworkWorldSystem");
     RTTI_METHOD(Connect);
     RTTI_METHOD(Disconnect);
+    RTTI_METHOD(IsEnabled);
+    RTTI_METHOD(IsConnected);
+    RTTI_METHOD(TweakDBIDFromNumber);
+    RTTI_METHOD(GetUsername);
+    RTTI_METHOD(ExportCustomizationState);
+    RTTI_METHOD(ImportCustomizationState);
     RTTI_METHOD(GetEntityIdByServerId);
     RTTI_METHOD(GetAppearanceSystem);
     RTTI_METHOD(GetInterpolationSystem);

@@ -20,6 +20,7 @@ struct Settings
     String Version{};
     String ip = "127.0.0.1";
     uint16_t port = 11778;
+    String username = "Player";
     Vector<fs::path> mods = {};
     bool enabled = false;
     bool RpcOnly = false;

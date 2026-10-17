@@ -70,5 +70,102 @@ public static partial class CampaignServer
 
 	public static partial void ReportSnapshotDone_Impl(ulong playerId);
 
+	[ServerRpc(Class = 17961805562553929976, Function = 10589897355757963147)]
+	public static void EnterWorld(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+
+		EnterWorld_Impl(playerId);
+	}
+
+	public static partial void EnterWorld_Impl(ulong playerId);
+
+	[ServerRpc(Class = 17961805562553929976, Function = 328750511734320484)]
+	public static void LeaveWorld(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+
+		LeaveWorld_Impl(playerId);
+	}
+
+	public static partial void LeaveWorld_Impl(ulong playerId);
+
+	[ServerRpc(Class = 17961805562553929976, Function = 9539412165497691544)]
+	public static void LobbySetReady(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+		var ready = data.ReadBool();
+
+		LobbySetReady_Impl(playerId, ready);
+	}
+
+	public static partial void LobbySetReady_Impl(ulong playerId, bool ready);
+
+	[ServerRpc(Class = 17961805562553929976, Function = 8027959008890499350)]
+	public static void LobbyChoose(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+		var mode = data.ReadInt32();
+		var campaign = data.ReadString();
+
+		LobbyChoose_Impl(playerId, mode, campaign);
+	}
+
+	public static partial void LobbyChoose_Impl(ulong playerId, int mode, string campaign);
+
+	[ServerRpc(Class = 17961805562553929976, Function = 7994748455733608801)]
+	public static void LobbyStart(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+
+		LobbyStart_Impl(playerId);
+	}
+
+	public static partial void LobbyStart_Impl(ulong playerId);
+
+	[ServerRpc(Class = 17961805562553929976, Function = 11961131747109463986)]
+	public static void CastVote(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+		var voteId = data.ReadUint32();
+		var option = data.ReadInt32();
+
+		CastVote_Impl(playerId, voteId, option);
+	}
+
+	public static partial void CastVote_Impl(ulong playerId, uint voteId, int option);
+
+	[ServerRpc(Class = 17961805562553929976, Function = 13465648630929998347)]
+	public static void ReportCharacterPart(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+		var key = data.ReadString();
+		var value = data.ReadString();
+
+		ReportCharacterPart_Impl(playerId, key, value);
+	}
+
+	public static partial void ReportCharacterPart_Impl(ulong playerId, string key, string value);
+
+	[ServerRpc(Class = 17961805562553929976, Function = 15847670867826915474)]
+	public static void ReportCharacterDone(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+
+		ReportCharacterDone_Impl(playerId);
+	}
+
+	public static partial void ReportCharacterDone_Impl(ulong playerId);
+
+	[ServerRpc(Class = 17961805562553929976, Function = 17162967044978803525)]
+	public static void RequestCharacter(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+
+		RequestCharacter_Impl(playerId);
+	}
+
+	public static partial void RequestCharacter_Impl(ulong playerId);
+
 }
 }

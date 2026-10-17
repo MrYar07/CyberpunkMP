@@ -6,6 +6,14 @@ import CyberpunkMP.*
 public native class NetworkWorldSystem extends IGameSystem {
     public native func Connect() -> Void;
     public native func Disconnect() -> Void;
+    public native func IsEnabled() -> Bool;
+    public native func IsConnected() -> Bool;
+    public native func GetUsername() -> String;
+    // Character creator state as base64; empty when no creator state exists.
+    public native func ExportCustomizationState() -> String;
+    // Into the creator's current state: call InitializeState() before, FinalizeState() after.
+    public native func ImportCustomizationState(data: String) -> Bool;
+    public native func TweakDBIDFromNumber(value: Uint64) -> TweakDBID;
     public native func GetEntityIdByServerId(serverId: Uint64) -> EntityID;
     public native func GetAppearanceSystem() -> ref<AppearanceSystem>;
     public native func GetChatSystem() -> ref<ChatSystem>;

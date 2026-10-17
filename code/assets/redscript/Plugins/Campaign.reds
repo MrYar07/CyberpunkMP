@@ -19,6 +19,15 @@ public native class CampaignServer extends ServerRpc {
     public static native func ReportFact(name: String, value: Int32) -> Void;
     public static native func ReportFactBatch(entries: String) -> Void;
     public static native func ReportSnapshotDone() -> Void;
+    public static native func EnterWorld() -> Void;
+    public static native func LeaveWorld() -> Void;
+    public static native func LobbySetReady(ready: Bool) -> Void;
+    public static native func LobbyChoose(mode: Int32, campaign: String) -> Void;
+    public static native func LobbyStart() -> Void;
+    public static native func CastVote(voteId: Uint32, option: Int32) -> Void;
+    public static native func ReportCharacterPart(key: String, value: String) -> Void;
+    public static native func ReportCharacterDone() -> Void;
+    public static native func RequestCharacter() -> Void;
 }
 
 // ClientRpc functions are invoked without an instance, so they only route to CampaignSync.
@@ -46,6 +55,36 @@ public class CampaignClient extends ClientRpc {
     // The server sends the watch list in batches; the last one closes the host's snapshot.
     public func WatchFacts(names: String, last: Bool) -> Void {
         CampaignSync.Get().WatchFacts(names, last);
+    }
+
+    // The lobby lives at the main menu, where there are no ScriptableSystems: these go to
+    // the CampaignLobby service instead.
+    public func LobbyState(state: String) -> Void {
+        CampaignLobby.Get().OnState(state);
+    }
+
+    public func LobbyBegin(mode: Int32, lifePath: String, isHost: Bool) -> Void {
+        CampaignLobby.Get().OnBegin(mode, lifePath, isHost);
+    }
+
+    public func VoteOpened(voteId: Uint32, kind: String, options: String, seconds: Int32) -> Void {
+        CampaignLobby.Get().OnVoteOpened(voteId, kind, options, seconds);
+    }
+
+    public func VoteTally(voteId: Uint32, counts: String) -> Void {
+        CampaignLobby.Get().OnVoteTally(voteId, counts);
+    }
+
+    public func VoteClosed(voteId: Uint32, winner: Int32) -> Void {
+        CampaignLobby.Get().OnVoteClosed(voteId, winner);
+    }
+
+    public func CharacterPart(key: String, value: String) -> Void {
+        CampaignLobby.Get().OnCharacterPart(key, value);
+    }
+
+    public func CharacterDone(found: Bool) -> Void {
+        CampaignLobby.Get().OnCharacterDone(found);
     }
 }
 
@@ -118,6 +157,7 @@ public class CampaignFactWatcher extends IScriptable {
 }
 
 public class CampaignSync extends ScriptableSystem {
+    private let m_inWorld: Bool;
     private let m_isHost: Bool;
     private let m_hasRole: Bool;
     private let m_journalListening: Bool;
@@ -132,6 +172,22 @@ public class CampaignSync extends ScriptableSystem {
     private func OnDetach() -> Void {
         this.StopJournalListening();
         this.ClearWatchers();
+        this.m_hasRole = false;
+
+        if this.m_inWorld {
+            this.m_inWorld = false;
+            CampaignLobby.Get().OnWorldGone();
+        }
+    }
+
+    // The story is only synced once the world is up; the server waits for this.
+    private func OnPlayerAttach(request: ref<PlayerAttachRequest>) -> Void {
+        this.m_inWorld = true;
+        CampaignLobby.Get().OnWorldReady(this.GetGameInstance());
+    }
+
+    public func IsInWorld() -> Bool {
+        return this.m_inWorld;
     }
 
     public func IsHost() -> Bool {

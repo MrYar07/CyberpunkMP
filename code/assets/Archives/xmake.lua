@@ -25,3 +25,12 @@ target("Archives")
     set_group("Assets")
     add_rules("archive")
     add_files("packed/archive/pc/mod/CyberpunkMP.archive")
+
+    -- The campaign guest start. Guests must not run quests of their own (the host's game
+    -- runs the story), and a running quest cannot be stopped, only kept from starting.
+    -- This replaces ep1\quest\ep1_standalone.gamedef - the "Phantom Liberty" start - with
+    -- Night City Online's clean start (nco 9e1832f, proven in game): base Night City with
+    -- the prologue skipped, the EP1 world without its story, the preorder Quadra; spawn
+    -- #q000_spwn_start. The campaign lobby sends guests through that start and the host
+    -- through the normal one. Source: source/archive/ep1/quest/ep1_standalone.gamedef.
+    add_files("packed/archive/pc/mod/zz_CampaignCoop_GuestStart.archive")
