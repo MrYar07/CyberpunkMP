@@ -121,8 +121,24 @@ public class ChatController extends inkHUDGameController {
         this.UpdateInputHints();
     }
 
+    // Chat commands ("/...") are handed to these scriptable systems as a ChatCommandRequest
+    // instead of being sent (plugins handle them in OnChatCommandRequest).
+    public static func CommandSystems() -> array<CName> = [n"CyberpunkMP.Plugins.CampaignStory"]
+
     private final func SendChat() -> Void {
         let textEntered: String = this.m_input.GetText();
+        if StrBeginsWith(textEntered, "/") {
+            let container = GameInstance.GetScriptableSystemsContainer(GetGameInstance());
+            for name in ChatController.CommandSystems() {
+                let system = container.Get(name);
+                if IsDefined(system) {
+                    let request = new ChatCommandRequest();
+                    request.text = textEntered;
+                    system.QueueRequest(request);
+                }
+            }
+            return;
+        }
         if NotEquals(textEntered, "") {
             FTLog(s"[ChatController] SendChat \"\(textEntered)\"");
 

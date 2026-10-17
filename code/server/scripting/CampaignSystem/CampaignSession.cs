@@ -142,6 +142,7 @@ namespace CampaignSystem
 
         internal CampaignLobby Lobby { get; }
         internal CampaignCombat Combat { get; }
+        internal CampaignStory Story { get; }
 
         // Set once the host has sent its whole snapshot. Until then guests are not sent
         // state, because anything missing would be read as "unset" and wipe their facts.
@@ -162,6 +163,7 @@ namespace CampaignSystem
             Lobby = new CampaignLobby();
             Lobby.HostChanged += OnHostChanged;
             Combat = new CampaignCombat(sync, () => hostId, () => hostInWorld, Voters);
+            Story = new CampaignStory(sync, () => hostId, () => hostInWorld, Voters);
 
             Server.PlayerSystem.PlayerJoinEvent += OnPlayerJoin;
             Server.PlayerSystem.PlayerLeftEvent += OnPlayerLeft;
@@ -200,6 +202,7 @@ namespace CampaignSystem
             snapshotReady = false;
             CancelDialogVote();
             SetScene(0, 0, 0, 0);
+            Story.HostGone();
 
             // The new host may already be in the world (the old host left mid-game).
             if (playerId is { } id && Lobby.Find(id) is { InWorld: true })
@@ -231,12 +234,15 @@ namespace CampaignSystem
                     snapshotReady = false;
                     CancelDialogVote();
                     SetScene(0, 0, 0, 0);
+                    Story.HostGone();
                 }
             }
         }
 
         private void EnterWorldLocked(ulong playerId)
         {
+            Story.EnterWorld(playerId);
+
             if (playerId == hostId)
             {
                 PromoteToHost(playerId);

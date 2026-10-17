@@ -15,6 +15,10 @@ import CyberpunkMP.World.*
 //   facing whoever is speaking.
 // When the scene ends they are released and follow their players again.
 //
+// Stage 6: a scene can have hand-placed poses (CampaignStory, keyed by the scene key every
+// game shares): extra number N stands at pose N, relative to the local V where V stood when
+// the extras were placed. "/coop move" nudges an extra, "/coop save" stores the poses.
+//
 // Seats come from the world sectors loaded around the player (Codeware's Resource/Ready
 // event); NetworkWorldSystem.FindSceneSpots picks the AI spots whose workspot is a known
 // generic sit/stand pose (SceneSpotsData.inl, tools/campaign/extract_workspots.py).
@@ -31,8 +35,13 @@ public class CampaignSceneSpot {
 public class CampaignExtra {
     public let entity: wref<GameObject>;
     public let id: EntityID;
-    // 1 = car seat, 2 = on a spot, 3 = standing beside V
+    // 1 = car seat, 2 = on a spot, 3 = standing beside V, 4 = on a hand-placed pose
     public let place: Int32;
+    // Place 4: relative to the anchor (meters right, forward, up; degrees left of V's facing).
+    public let right: Float;
+    public let forward: Float;
+    public let up: Float;
+    public let yaw: Float;
     public let slot: Int32;
     public let seat: CName;
     public let command: ref<AIUseWorkspotCommand>;
@@ -53,6 +62,11 @@ public class CampaignExtras extends ScriptableSystem {
     // What the local V does: 1 = in a car, 2 = sitting, 3 = standing
     private let m_mode: Int32;
     private let m_speaker: wref<GameObject>;
+    // Where V stood and faced when the extras were placed: hand-placed poses hang off it.
+    private let m_anchor: Vector4;
+    private let m_anchorForward: Vector4;
+    private let m_anchored: Bool;
+    private let m_sceneKey: String;
 
     public static func Get() -> ref<CampaignExtras> {
         let container = GameInstance.GetScriptableSystemsContainer(GetGameInstance());
@@ -102,6 +116,7 @@ public class CampaignExtras extends ScriptableSystem {
         this.ReleaseAll();
         this.m_mode = 0;
         this.m_speaker = null;
+        this.m_anchored = false;
         ArrayClear(this.m_spots);
         let network = GameInstance.GetNetworkWorldSystem();
         if IsDefined(network) {
@@ -121,9 +136,14 @@ public class CampaignExtras extends ScriptableSystem {
         }
 
         let mode = this.LocalMode(player);
-        if mode != this.m_mode {
+        let sceneKey = GameInstance.GetNetworkWorldSystem().GetSceneKey();
+        if mode != this.m_mode || NotEquals(sceneKey, this.m_sceneKey) {
             this.ReleaseAll();
             this.m_mode = mode;
+            this.m_sceneKey = sceneKey;
+            this.m_anchor = player.GetWorldPosition();
+            this.m_anchorForward = Vector4.Normalize2D(player.GetWorldForward());
+            this.m_anchored = true;
             this.CollectSpots(player);
         }
 
@@ -178,6 +198,9 @@ public class CampaignExtras extends ScriptableSystem {
         let placed = false;
         if this.m_mode == 1 {
             placed = this.SeatInCar(player, extra);
+        }
+        if !placed {
+            placed = this.UsePose(extra);
         }
         if !placed && this.m_mode == 2 {
             placed = this.UseSpot(player, extra, 1);
@@ -278,6 +301,101 @@ public class CampaignExtras extends ScriptableSystem {
         let lookAt = IsDefined(this.m_speaker) ? this.m_speaker.GetWorldPosition() : center;
         GameInstance.GetTeleportationFacility(this.GetGameInstance()).Teleport(extra.entity, position, Vector4.ToRotation(lookAt - position));
         extra.place = 3;
+    }
+
+    // ---- hand-placed poses (stage 6) ----
+
+    private func UsePose(extra: ref<CampaignExtra>) -> Bool {
+        let story = CampaignStory.Get();
+        if !IsDefined(story) || !this.m_anchored {
+            return false;
+        }
+        let poses = story.GetPoses(this.m_sceneKey);
+        if extra.slot >= ArraySize(poses) {
+            return false;
+        }
+        let f = StrSplit(poses[extra.slot], ":");
+        if ArraySize(f) < 4 {
+            return false;
+        }
+        extra.right = StringToFloat(f[0]);
+        extra.forward = StringToFloat(f[1]);
+        extra.up = StringToFloat(f[2]);
+        extra.yaw = StringToFloat(f[3]);
+        this.ApplyPose(extra);
+        return true;
+    }
+
+    private func RightOf(forward: Vector4) -> Vector4 {
+        return new Vector4(forward.Y, -forward.X, 0.0, 0.0);
+    }
+
+    private func ApplyPose(extra: ref<CampaignExtra>) -> Void {
+        let forward = this.m_anchorForward;
+        let position = this.m_anchor + this.RightOf(forward) * extra.right + forward * extra.forward + new Vector4(0.0, 0.0, extra.up, 0.0);
+        let angle = Deg2Rad(extra.yaw);
+        let facing = new Vector4(forward.X * CosF(angle) - forward.Y * SinF(angle), forward.X * SinF(angle) + forward.Y * CosF(angle), 0.0, 0.0);
+        GameInstance.GetTeleportationFacility(this.GetGameInstance()).Teleport(extra.entity, position, Vector4.ToRotation(facing));
+        extra.place = 4;
+    }
+
+    // Where an extra is now, relative to the anchor - whatever placed it.
+    private func Measure(extra: ref<CampaignExtra>) -> Void {
+        if extra.place == 4 || !IsDefined(extra.entity) {
+            return;
+        }
+        let forward = this.m_anchorForward;
+        let offset = extra.entity.GetWorldPosition() - this.m_anchor;
+        extra.right = Vector4.Dot(offset, this.RightOf(forward));
+        extra.forward = Vector4.Dot(offset, forward);
+        extra.up = offset.Z;
+        let facing = Vector4.Normalize2D(extra.entity.GetWorldForward());
+        extra.yaw = Rad2Deg(AtanF(forward.X * facing.Y - forward.Y * facing.X, Vector4.Dot(forward, facing)));
+    }
+
+    public func IsActive() -> Bool = this.m_active
+    public func SceneKey() -> String = this.m_sceneKey
+
+    // "/coop move": nudges extra number slot (from 0) in V's frame.
+    public func Nudge(slot: Int32, right: Float, forward: Float, up: Float, yaw: Float) -> Bool {
+        if !this.m_active || !this.m_anchored {
+            return false;
+        }
+        for extra in this.m_extras {
+            if extra.slot == slot && extra.place != 1 && IsDefined(extra.entity) {
+                this.Measure(extra);
+                if extra.place == 2 {
+                    AIComponent.CancelCommand(extra.entity as ScriptedPuppet, extra.command);
+                    GameInstance.GetWorkspotSystem(this.GetGameInstance()).StopNpcInWorkspot(extra.entity);
+                }
+                extra.right += right;
+                extra.forward += forward;
+                extra.up += up;
+                extra.yaw += yaw;
+                this.ApplyPose(extra);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Every extra's pose relative to V, in slot order, as CampaignStory stores them.
+    public func DescribePoses() -> String {
+        let out = "";
+        let slot = 0;
+        while slot < ArraySize(this.m_extras) {
+            for extra in this.m_extras {
+                if extra.slot == slot {
+                    this.Measure(extra);
+                    if StrLen(out) > 0 {
+                        out += "|";
+                    }
+                    out += s"\(FloatToStringPrec(extra.right, 2)):\(FloatToStringPrec(extra.forward, 2)):\(FloatToStringPrec(extra.up, 2)):\(FloatToStringPrec(extra.yaw, 0))";
+                }
+            }
+            slot += 1;
+        }
+        return out;
     }
 
     // ---- spots and releasing ----

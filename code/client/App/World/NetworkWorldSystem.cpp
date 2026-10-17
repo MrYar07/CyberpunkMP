@@ -504,6 +504,11 @@ void NetworkWorldSystem::SetQuestMirror(int32_t aMode)
     QuestMirror::SetMode(aMode);
 }
 
+Red::CString NetworkWorldSystem::GetSceneKey()
+{
+    return QuestMirror::GetSceneKey();
+}
+
 Red::CString NetworkWorldSystem::TakeQuestNodes()
 {
     return QuestMirror::TakeRecorded();

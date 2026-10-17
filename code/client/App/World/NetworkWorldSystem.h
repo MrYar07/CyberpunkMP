@@ -61,6 +61,7 @@ struct NetworkWorldSystem : RED4ext::IGameSystem, Core::HookingAgent, flecs::wor
     // Campaign scenes on guests (QuestMirror) and other players' characters during them.
     void SetQuestMirror(int32_t aMode);
     Red::CString TakeQuestNodes();
+    Red::CString GetSceneKey();
     void ReplayQuestNodes(const Red::CString& aEntries);
     void SetSceneSpacing(bool aEnabled, const Red::Vector4& aAnchor, const Red::Vector4& aForward);
     void SetPuppetHeld(Red::EntityID aEntity, bool aHeld);
@@ -111,6 +112,7 @@ RTTI_DEFINE_CLASS(NetworkWorldSystem, {
     RTTI_METHOD(TakeBlockedChoiceConfirms);
     RTTI_METHOD(InjectChoice);
     RTTI_METHOD(SetQuestMirror);
+    RTTI_METHOD(GetSceneKey);
     RTTI_METHOD(TakeQuestNodes);
     RTTI_METHOD(ReplayQuestNodes);
     RTTI_METHOD(SetSceneSpacing);

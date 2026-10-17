@@ -54,3 +54,7 @@ public func CreateInputHint(label: CName, action: CName, hold: Bool) -> InputHin
     // data.groupId = n"CyberpunkMP";
     return data;
 }
+
+public class ChatCommandRequest extends ScriptableSystemRequest {
+    public let text: String;
+}

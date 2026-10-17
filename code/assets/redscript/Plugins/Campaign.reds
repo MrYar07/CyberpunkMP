@@ -37,6 +37,9 @@ public native class CampaignServer extends ServerRpc {
     public static native func ReportDowned(downed: Bool) -> Void;
     public static native func ReportRevive(puppetId: Uint64) -> Void;
     public static native func ReportBledOut() -> Void;
+    public static native func ReportHostMode(mode: Int32) -> Void;
+    public static native func ReportTeleport(fromX: Float, fromY: Float, fromZ: Float, toX: Float, toY: Float, toZ: Float) -> Void;
+    public static native func SaveScenePoses(scene: String, poses: String) -> Void;
 }
 
 // ClientRpc functions are invoked without an instance, so they only route to CampaignSync.
@@ -150,6 +153,28 @@ public class CampaignClient extends ClientRpc {
         let combat = CampaignCombat.Get();
         if IsDefined(combat) {
             combat.OnRespawn(x, y, z, 50.0);
+        }
+    }
+
+    // Stage 6: playing the campaign through (CampaignStory).
+    public func HostMode(mode: Int32) -> Void {
+        let story = CampaignStory.Get();
+        if IsDefined(story) {
+            story.OnHostMode(mode);
+        }
+    }
+
+    public func HostTeleported(fromX: Float, fromY: Float, fromZ: Float, toX: Float, toY: Float, toZ: Float) -> Void {
+        let story = CampaignStory.Get();
+        if IsDefined(story) {
+            story.OnHostTeleported(new Vector4(fromX, fromY, fromZ, 1.0), new Vector4(toX, toY, toZ, 1.0));
+        }
+    }
+
+    public func ScenePoses(scene: String, poses: String) -> Void {
+        let story = CampaignStory.Get();
+        if IsDefined(story) {
+            story.OnScenePoses(scene, poses);
         }
     }
 

@@ -1,0 +1,4 @@
+# Campaign co-op: hand-placed poses of the other players' characters per scene.
+# <scene key>=<right>:<forward>:<up>:<yaw>|... (meters and degrees, relative to the local V).
+# Scene keys come from "/coop scene" in game; "/coop save" writes config/campaign_scenes.txt
+# next to the server, copy the lines here to ship them with the plugin.

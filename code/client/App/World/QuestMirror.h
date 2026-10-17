@@ -30,6 +30,8 @@ struct QuestMirror : Core::HookingAgent
     static void SetMode(int32_t aMode);
     // Host: everything recorded since the last call, in execution order.
     static Red::CString TakeRecorded();
+    // The scene that started last (host: recorded, guest: replayed); empty before any.
+    static Red::CString GetSceneKey();
     // Guest: queues the entries for execution.
     static void Replay(const Red::CString& aEntries);
 

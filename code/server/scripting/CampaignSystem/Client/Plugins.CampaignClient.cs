@@ -317,5 +317,50 @@ public static class CampaignClient
 		}
 	}
 
+
+	[ClientRpc(Class = 6609351954351555900, Function = 6500167356259170651)]
+	public static void HostMode(ulong playerId, int mode)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteInt32(mode);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 6500167356259170651, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
+	[ClientRpc(Class = 6609351954351555900, Function = 12574951820308735694)]
+	public static void HostTeleported(ulong playerId, float fromX, float fromY, float fromZ, float toX, float toY, float toZ)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteFloat(fromX);
+			data.WriteFloat(fromY);
+			data.WriteFloat(fromZ);
+			data.WriteFloat(toX);
+			data.WriteFloat(toY);
+			data.WriteFloat(toZ);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 12574951820308735694, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
+	[ClientRpc(Class = 6609351954351555900, Function = 15627888494321035644)]
+	public static void ScenePoses(ulong playerId, string scene, string poses)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteString(scene);
+			data.WriteString(poses);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 15627888494321035644, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
 }
 }

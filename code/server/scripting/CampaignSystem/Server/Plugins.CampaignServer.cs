@@ -268,5 +268,44 @@ public static partial class CampaignServer
 
 	public static partial void ReportBledOut_Impl(ulong playerId);
 
+
+	[ServerRpc(Class = 17961805562553929976, Function = 3448138912698728386)]
+	public static void ReportHostMode(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+		var mode = data.ReadInt32();
+
+		ReportHostMode_Impl(playerId, mode);
+	}
+
+	public static partial void ReportHostMode_Impl(ulong playerId, int mode);
+
+	[ServerRpc(Class = 17961805562553929976, Function = 4521646085632750596)]
+	public static void ReportTeleport(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+		var fromX = data.ReadFloat();
+		var fromY = data.ReadFloat();
+		var fromZ = data.ReadFloat();
+		var toX = data.ReadFloat();
+		var toY = data.ReadFloat();
+		var toZ = data.ReadFloat();
+
+		ReportTeleport_Impl(playerId, fromX, fromY, fromZ, toX, toY, toZ);
+	}
+
+	public static partial void ReportTeleport_Impl(ulong playerId, float fromX, float fromY, float fromZ, float toX, float toY, float toZ);
+
+	[ServerRpc(Class = 17961805562553929976, Function = 6733226851358682090)]
+	public static void SaveScenePoses(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+		var scene = data.ReadString();
+		var poses = data.ReadString();
+
+		SaveScenePoses_Impl(playerId, scene, poses);
+	}
+
+	public static partial void SaveScenePoses_Impl(ulong playerId, string scene, string poses);
 }
 }

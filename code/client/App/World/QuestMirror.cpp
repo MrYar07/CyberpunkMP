@@ -120,6 +120,9 @@ thread_local bool s_replaying{false};
 bool s_attached{false};
 
 std::mutex s_lock;
+// The scene that started last: "<resource hash>/<phase node ids>/<node id>", the same in
+// every game (campaign scene poses are keyed by it).
+std::string s_sceneKey;
 std::vector<Red::CClass*> s_mirrored;
 std::vector<Red::CClass*> s_startOnly;
 std::string s_recorded;
@@ -152,6 +155,12 @@ void ResolveClasses()
         if (auto* pClass = Red::CRTTISystem::Get()->GetClass(name))
             s_startOnly.push_back(pClass);
     }
+}
+
+bool IsSceneNode(Red::CClass* aClass)
+{
+    static auto* pScene = Red::CRTTISystem::Get()->GetClass("questSceneNodeDefinition");
+    return pScene && aClass == pScene;
 }
 
 template<typename T>
@@ -237,7 +246,9 @@ void Record(Red::quest::PhaseInstance* apPhase, Red::quest::NodeDefinition* apNo
             entry += ".";
         entry += std::to_string(phases[i]);
     }
-    entry += "/" + std::to_string(apNode->id) + "/" + std::to_string(static_cast<uint64_t>(aSocket.name));
+    entry += "/" + std::to_string(apNode->id);
+    const auto key = entry;
+    entry += "/" + std::to_string(static_cast<uint64_t>(aSocket.name));
 
     const auto now = std::chrono::steady_clock::now();
     const auto window = IsOneOf(s_startOnly, pClass) ? std::chrono::duration_cast<std::chrono::steady_clock::duration>(kStartOnlyWindow)
@@ -245,6 +256,9 @@ void Record(Red::quest::PhaseInstance* apPhase, Red::quest::NodeDefinition* apNo
     if (auto it = s_lastSeen.find(entry); it != s_lastSeen.end() && now - it->second < window)
         return;
     s_lastSeen[entry] = now;
+
+    if (IsSceneNode(pClass))
+        s_sceneKey = key;
 
     if (!s_recorded.empty())
         s_recorded += ",";
@@ -361,6 +375,12 @@ void QuestMirror::SetMode(int32_t aMode)
     s_pending.clear();
 }
 
+Red::CString QuestMirror::GetSceneKey()
+{
+    std::lock_guard _(s_lock);
+    return Red::CString(s_sceneKey.c_str());
+}
+
 Red::CString QuestMirror::TakeRecorded()
 {
     std::lock_guard _(s_lock);
@@ -428,7 +448,22 @@ void QuestMirror::Update()
 
         // Outside the lock: the node runs through our own hook.
         if (auto* pNode = Resolve(pending))
+        {
+            if (IsSceneNode(pNode->GetType()))
+            {
+                std::string key = std::to_string(pending.resource) + "/";
+                for (size_t i = 0; i < pending.phases.size(); ++i)
+                {
+                    if (i > 0)
+                        key += ".";
+                    key += std::to_string(pending.phases[i]);
+                }
+                key += "/" + std::to_string(pending.node);
+                std::lock_guard _(s_lock);
+                s_sceneKey = key;
+            }
             Execute(pNode, Red::CName(pending.socket));
+        }
         else
             spdlog::warn("[QuestMirror] node {} not found in resource {}", pending.node, pending.resource);
     }

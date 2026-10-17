@@ -25,6 +25,8 @@ public native class NetworkWorldSystem extends IGameSystem {
     public native func SetQuestMirror(mode: Int32) -> Void;
     public native func TakeQuestNodes() -> String;
     public native func ReplayQuestNodes(entries: String) -> Void;
+    // The scene that started last, the same key in every game (campaign scene poses).
+    public native func GetSceneKey() -> String;
     // Other players' characters near the scene spot (anchor, facing forward) stand beside it.
     public native func SetSceneSpacing(enabled: Bool, anchor: Vector4, forward: Vector4) -> Void;
     // A puppet placed by the local scene (seat, chair, spot) stops following its player.
