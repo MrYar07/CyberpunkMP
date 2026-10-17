@@ -54,6 +54,8 @@ public class CampaignLobby extends ScriptableService {
     private let m_campaigns: array<String>;
     private let m_players: array<ref<CampaignPlayerInfo>>;
     private let m_connecting: Bool;
+    // What the last Steam invite said (shown on the lobby panel).
+    private let m_inviteNote: String;
 
     // ---- the running vote ----
     private let m_voteId: Uint32;
@@ -358,6 +360,19 @@ public class CampaignLobby extends ScriptableService {
         this.RefreshMenu();
     }
 
+    // Steam friends get an invite with this server's address (SteamInvites in the client).
+    public func InviteFriend() -> Void {
+        this.m_inviteNote = CampaignLobby.InviteNote(GameInstance.GetNetworkWorldSystem().OpenSteamInvite());
+        this.RefreshMenu();
+    }
+
+    public static func InviteNote(address: String) -> String {
+        if StrLen(address) == 0 {
+            return "Steam invites need the Steam version of the game with the overlay on";
+        }
+        return s"Invite: friends connect to \(address) - the server's port must be reachable for them (forwarded, or the same LAN/VPN)";
+    }
+
     public func ToggleReady() -> Void {
         CampaignServer.LobbySetReady(!this.IsReady());
     }
@@ -483,6 +498,10 @@ public class CampaignLobby extends ScriptableService {
 
         if this.m_voteOpen {
             text += s"\nVote: \(this.m_voteSeconds)s - most votes wins, a tie is drawn";
+        }
+
+        if StrLen(this.m_inviteNote) > 0 {
+            text += s"\n\(this.m_inviteNote)";
         }
 
         text += "\nPlayers:";
@@ -862,6 +881,7 @@ private func PopulateMenuItemList() -> Void {
         this.AddMenuItem(lobby.IsReady() ? "CO-OP: NOT READY" : "CO-OP: READY", n"OnCampaignReady");
     }
 
+    this.AddMenuItem("CO-OP: INVITE STEAM FRIEND", n"OnCampaignInvite");
     this.AddMenuItem("CO-OP: LEAVE", n"OnCampaignLeave");
     this.AddMenuItem(GetLocalizedText("UI-Labels-Settings"), n"OnSwitchToSettings");
     this.AddMenuItem(GetLocalizedText("UI-Labels-Credits"), n"OnCreditsPicker");
@@ -882,6 +902,7 @@ protected func HandleMenuItemActivate(data: ref<PauseMenuListItemData>) -> Bool 
     switch data.eventName {
         case n"OnCampaignConnect": lobby.Connect(); return true;
         case n"OnCampaignLeave": lobby.Leave(); return true;
+        case n"OnCampaignInvite": lobby.InviteFriend(); return true;
         case n"OnCampaignReady": lobby.ToggleReady(); return true;
         case n"OnCampaignNew": lobby.ChooseNew(); return true;
         case n"OnCampaignLoad": lobby.ChooseNextSaved(); return true;

@@ -17,6 +17,7 @@ import CyberpunkMP.World.*
 //     /coop clear                       remove this scene's stored poses
 //     /coop hide                        nobody else in this scene (intimate scenes)
 //     /coop where                       this V's position (for the mission notes)
+//     /coop invite                      invite a Steam friend to this server
 
 public class CampaignScenePoses {
     public let scene: String;
@@ -242,6 +243,11 @@ public class CampaignStory extends ScriptableSystem {
         let verb = ArraySize(words) > 1 ? words[1] : "help";
         let extras = CampaignExtras.Get();
 
+        if Equals(verb, "invite") {
+            this.Reply(CampaignLobby.InviteNote(GameInstance.GetNetworkWorldSystem().OpenSteamInvite()));
+            return;
+        }
+
         if Equals(verb, "where") {
             let player = this.Player();
             if IsDefined(player) {
@@ -291,7 +297,7 @@ public class CampaignStory extends ScriptableSystem {
             this.Reply(s"poses removed for \(scene)");
             return;
         }
-        this.Reply("/coop scene | move <n> <right> <forward> [up] [yaw] | save | clear | hide | where");
+        this.Reply("/coop scene | move <n> <right> <forward> [up] [yaw] | save | clear | hide | where | invite");
     }
 
     // Shown in this player's chat only.

@@ -25,6 +25,8 @@ podbierania pojedynczych poprawek.
    pieniądze, przedmioty); kto jej nie ma, tworzy nową.
 6. Po powrocie do menu w trakcie kampanii: **JOIN THE CAMPAIGN** (host — wczytanie
    zapisu, gość — postać z kampanii).
+7. Znajomi ze Steam: **INVITE STEAM FRIEND** w lobby albo `/coop invite` w grze (opis
+   niżej, „Zapraszanie przez Steam”).
 
 ## Model: host jest autorytetem
 
@@ -344,6 +346,35 @@ Do sprawdzenia w fazie testowej: czy czat da się otworzyć w trakcie sceny (je�
 pozy po scenie nie mają sensu, potrzebny skrót klawiszowy); czy `GetIsInBraindance` jest
 prawdą przez cały BD; skok w pojeździe nie przegrupowuje (loty AV), więc teleport questa z
 hostem w aucie nie zabierze gości.
+
+## Zapraszanie przez Steam
+
+Kod: `code/client/App/World/SteamInvites.{h,cpp}` (zmiana rdzenia klienta — Steam API to
+nie skrypt), menu w `CampaignLobby.reds`, komenda w `CampaignStory.reds`.
+
+- Klient używa `steam_api64.dll` gry przez płaskie API (`SteamAPI_SteamFriends_v017`);
+  wersja GOG/Epic po prostu nie ma tej opcji (komunikat w lobby).
+- **INVITE STEAM FRIEND** (lobby) / `/coop invite` (gra) otwiera okno zaproszeń nakładki
+  Steam (`ActivateGameOverlayInviteDialogConnectString`). Zaproszenie niesie argumenty
+  startowe: `--online --ip=<adres> --port=<port> --coopjoin`.
+- Znajomy przyjmuje zaproszenie:
+  - gra wyłączona → Steam uruchamia ją z tymi argumentami, mod włącza się sam i w menu
+    głównym łączy z lobby (`--coopjoin`); nazwa gracza = nick ze Steam, jeśli nie podano
+    `--username`;
+  - gra włączona z modem → callback Steam `GameRichPresenceJoinRequested` (337); klient
+    łączy się, gdy jest w menu (z innego serwera najpierw się rozłącza).
+- Będąc połączonym, gracz ma w Steam Rich Presence `connect` z tymi samymi argumentami —
+  znajomi widzą „Dołącz do gry” na liście znajomych.
+- Adres w zaproszeniu: `--publicip=<adres>` jeśli podany; inaczej adres serwera, do
+  którego jest się połączonym; gdy serwer jest na tym komputerze (127.0.0.1) — najlepszy
+  adres tego komputera: publiczny > VPN (Hamachi 25.x, Radmin 26.x, Tailscale 100.64/10)
+  > LAN. Lobby pokazuje, jaki adres poszedł.
+- **Port serwera (domyślnie 11778, UDP) musi być osiągalny dla znajomego**: przekierowany
+  na routerze, albo wspólna sieć LAN/VPN. Za CGNAT bez VPN zaproszenie nie pomoże.
+
+Do sprawdzenia w fazie testowej: czy Steam doklejając argumenty do opcji uruchamiania
+nie psuje ich (cudzysłowy), czy callback dochodzi (gra sama pompuje `SteamAPI_RunCallbacks`),
+układ `CCallbackBase` (vtable bez wirtualnego destruktora, jak w Steamworks).
 
 ## Budowanie
 

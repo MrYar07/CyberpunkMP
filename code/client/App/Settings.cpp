@@ -35,9 +35,21 @@ void Settings::Load()
                 name.pop_back();
 
             if (!name.empty())
+            {
                 settings.username = name.c_str();
+                settings.usernameGiven = true;
+            }
         }
     }
+
+    if (const auto publicIp = launchParameters.Get("-publicip"); publicIp)
+    {
+        if (publicIp->size > 0)
+            settings.publicIp = (*publicIp)[0].c_str();
+    }
+
+    if (launchParameters.Contains("-coopjoin"))
+        settings.autoJoin = true;
 
     if (const auto mods = launchParameters.Get("-mod"); mods)
     {

@@ -21,6 +21,7 @@
 #include "ChatSystem.h"
 #include "ChoiceInput.h"
 #include "QuestMirror.h"
+#include "SteamInvites.h"
 
 static uint64_t GTick = 0;
 
@@ -183,6 +184,7 @@ void NetworkWorldSystem::Update(uint64_t aTick)
 
     ChoiceInput::Update();
     QuestMirror::Update();
+    SteamInvites::Update(IsConnected(), m_inGame);
 
     const auto service = Core::Container::Get<NetworkService>();
     if (service && service->IsConnected())
@@ -460,6 +462,7 @@ void NetworkWorldSystem::OnInitialize(const RED4ext::JobHandle& aJob)
 
     ChoiceInput::Attach();
     QuestMirror::Attach();
+    SteamInvites::Attach();
 }
 
 void NetworkWorldSystem::Connect()
@@ -502,6 +505,11 @@ bool NetworkWorldSystem::InjectChoice(int32_t aSteps)
 void NetworkWorldSystem::SetQuestMirror(int32_t aMode)
 {
     QuestMirror::SetMode(aMode);
+}
+
+Red::CString NetworkWorldSystem::OpenSteamInvite()
+{
+    return SteamInvites::OpenInviteDialog();
 }
 
 Red::CString NetworkWorldSystem::GetSceneKey()
