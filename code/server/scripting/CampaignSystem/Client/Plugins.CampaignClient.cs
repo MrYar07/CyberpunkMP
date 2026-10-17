@@ -223,5 +223,84 @@ public static class CampaignClient
 		}
 	}
 
+	[ClientRpc(Class = 6609351954351555900, Function = 15066878372926873225)]
+	public static void ApplyNpcs(ulong playerId, string entries)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteString(entries);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 15066878372926873225, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
+	[ClientRpc(Class = 6609351954351555900, Function = 13678590646573373444)]
+	public static void ApplyNpcHits(ulong playerId, string entries)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteString(entries);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 13678590646573373444, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
+	[ClientRpc(Class = 6609351954351555900, Function = 17394431211553190877)]
+	public static void CoopPlayers(ulong playerId, int count)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteInt32(count);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 17394431211553190877, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
+	[ClientRpc(Class = 6609351954351555900, Function = 13676974924647780444)]
+	public static void PlayerDowned(ulong playerId, ulong puppetId, bool downed)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteUint64(puppetId);
+			data.WriteBool(downed);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 13676974924647780444, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
+	[ClientRpc(Class = 6609351954351555900, Function = 662137139867725221)]
+	public static void Revived(ulong playerId, float health)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteFloat(health);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 662137139867725221, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
+	[ClientRpc(Class = 6609351954351555900, Function = 1384979802496007172)]
+	public static void CoopWipe(ulong playerId, int reason)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteInt32(reason);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 1384979802496007172, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
 }
 }

@@ -214,5 +214,49 @@ public static partial class CampaignServer
 
 	public static partial void ReportQuestNodes_Impl(ulong playerId, string entries);
 
+	[ServerRpc(Class = 17961805562553929976, Function = 16813903836054539307)]
+	public static void ReportNpcs(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+		var entries = data.ReadString();
+
+		ReportNpcs_Impl(playerId, entries);
+	}
+
+	public static partial void ReportNpcs_Impl(ulong playerId, string entries);
+
+	[ServerRpc(Class = 17961805562553929976, Function = 17570135868353181688)]
+	public static void ReportNpcHits(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+		var entries = data.ReadString();
+
+		ReportNpcHits_Impl(playerId, entries);
+	}
+
+	public static partial void ReportNpcHits_Impl(ulong playerId, string entries);
+
+	[ServerRpc(Class = 17961805562553929976, Function = 2744301312928919558)]
+	public static void ReportDowned(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+		var downed = data.ReadBool();
+
+		ReportDowned_Impl(playerId, downed);
+	}
+
+	public static partial void ReportDowned_Impl(ulong playerId, bool downed);
+
+	[ServerRpc(Class = 17961805562553929976, Function = 11402280963576794402)]
+	public static void ReportRevive(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+		var puppetId = data.ReadUint64();
+
+		ReportRevive_Impl(playerId, puppetId);
+	}
+
+	public static partial void ReportRevive_Impl(ulong playerId, ulong puppetId);
+
 }
 }

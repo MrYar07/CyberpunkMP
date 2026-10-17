@@ -120,8 +120,8 @@ Zmiany lokalne na serwerze: `config/campaign_facts.txt` — `nazwa` dodaje fakt,
   ustawi, może ruszyć u gościa. Do sprawdzenia w fazie testowej.
 - Host rejestruje kilka tysięcy listenerów faktów naraz. Jeśli to okaże się za drogie,
   zamiennikiem jest natywny hook zapisu FactsDB (RED4ext).
-- Walka nie jest synchronizowana. NPC pojawiają się u gości przez odtwarzane węzły questów,
-  ale ich AI liczy każda gra osobno.
+- Walka: każda gra ma własną kopię wroga z własną AI (etap 5), więc każdy gracz walczy ze
+  „swoimi” wrogami; zgadzają się zdrowie i śmierć, nie ruchy i strzały.
 
 ## Plan
 
@@ -135,7 +135,8 @@ Zmiany lokalne na serwerze: `config/campaign_facts.txt` — `nazwa` dodaje fakt,
 4. **Sceny i dialogi** (zrobione): przy starcie sceny u hosta goście są przenoszeni do
    niego i oglądają. **O opcjach dialogowych gracze głosują** (zasady niżej), wynik
    wybiera gra hosta.
-5. **NPC i walka**: AI liczona u hosta, klienci zgłaszają trafienia.
+5. **NPC i walka** (zrobione): zdrowie i śmierć wrogów od hosta, trafienia gości u hosta,
+   powalenie i ożywianie graczy (opis niżej).
 6. **Przejście kampanii misja po misji**, potem Phantom Liberty. Łatki na sceny, które
    zakładają jednego V (Johnny, braindance, Songbird).
 
@@ -272,6 +273,41 @@ przypisaniu `UI_MoveUp/Down` lub `DialogConfirm` na strzałki/F wybór nie zadzi
 zna tylko domyślne klawisze potwierdzenia. Goście widzą tekst opcji bez ikon testów
 umiejętności. Dialog, który po wyborze wraca z identycznymi opcjami bez zniknięcia, nie
 otwiera nowego głosowania (host wybiera wtedy sam).
+
+## NPC i walka (etap 5)
+
+Każda gra ma własną kopię każdego wroga (węzły spawnu questów odtwarza QuestMirror) z
+własną AI. Każdy gracz jest więc atakowany przez swoją kopię i obrażenia gracza zostają w
+jego grze — nie trzeba synchronizować strzałów. Zgadzać musi się, jak bardzo wróg jest
+ranny i czy żyje (`Plugins/CampaignCombat.reds`, serwer `CampaignCombat.cs`):
+
+- **Host** co 0,5 s zgłasza NPC, które się liczą (ranne, martwe, walczące, wrogie):
+  klucz (`EntityID` jako hash), czy statyczny, rekord TweakDB, pozycja, zdrowie w
+  promilach, stan (żyje / martwy / pokonany), wrogość. Zmiany od razu, pełna lista NPC
+  w promieniu 150 m od któregokolwiek gracza co 3 s (`ReportNpcs` → `ApplyNpcs`).
+- **Gość** wiąże każdy wpis ze swoim NPC: ten sam statyczny `EntityID` (NPC
+  postawione/społeczności mają ten sam w każdej grze), inaczej najbliższy niezwiązany NPC
+  tego samego rekordu w promieniu 12 m. Wrogi NPC hosta, którego gość nie ma (≤80 m),
+  dostaje zastępcę (`DynamicEntitySystem`, tag `CampaignCoop.Proxy`), usuwanego, gdy host
+  przestaje go zgłaszać na 15 s. Zdrowie u gościa schodzi do wartości hosta od razu, rośnie
+  (leczenie) dopiero 3 s po własnym trafieniu gościa; kopia dalej niż 30 m od pozycji u
+  hosta jest przenoszona. Śmierć u hosta = `Kill` u gościa (z V gościa jako sprawcą, gdy
+  wróg był wrogi — XP i łup dla każdego), pokonanie = `SoftKill`.
+- **Trafienia gości**: `NPCPuppet.OnHit` u gościa liczy obrażenia od lokalnego V jako
+  promile maks. zdrowia (różne poziomy postaci nie psują wyniku), co 0,5 s paczka do hosta
+  (`ReportNpcHits` → `ApplyNpcHits`), gra hosta odejmuje je przez `StatPoolsSystem`.
+  Zabicie kopii przez gościa zabija NPC u hosta — zabójstwo w dowolnej grze jest ostateczne.
+- **Gracze**: gdy w świecie są ≥2 osoby, V jest `Immortal` (serwer wysyła liczbę graczy
+  `CoopPlayers`). Przy zdrowiu ≤1% V jest **powalony**: nietykalny, przykucnięty, bez broni
+  i skoku; reszta dostaje komunikat (`PlayerDowned`). Kto stoi ≤2,5 m od powalonego przez
+  4 s, podnosi go (`ReportRevive` → `Revived`, 35% zdrowia). Gdy wszyscy w świecie leżą,
+  serwer zabija V hosta naprawdę (`CoopWipe`: ekran śmierci i wczytanie zapisu), a goście
+  wstają, gdy host wróci do świata. Zostaje jeden gracz → powaleni wstają.
+
+Do sprawdzenia w fazie testowej: czy `Immortal` zatrzymuje zdrowie V powyżej 0 i listener
+puli to widzi (próg 1%); czy dopasowanie po rekordzie i pozycji łączy właściwe kopie przy
+falach wrogów (DSS w Phantom Liberty); koszt `GetAttitudeTowards` dla wielu NPC; czy
+zastępcy z rekordu mają broń i AI walki; brak fizycznego „czołgania” (tylko przykucnięcie).
 
 ## Budowanie
 

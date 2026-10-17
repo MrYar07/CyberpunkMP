@@ -32,6 +32,10 @@ public native class CampaignServer extends ServerRpc {
     public static native func ReportDialogClosed() -> Void;
     public static native func ReportScene(tier: Int32, x: Float, y: Float, z: Float) -> Void;
     public static native func ReportQuestNodes(entries: String) -> Void;
+    public static native func ReportNpcs(entries: String) -> Void;
+    public static native func ReportNpcHits(entries: String) -> Void;
+    public static native func ReportDowned(downed: Bool) -> Void;
+    public static native func ReportRevive(puppetId: Uint64) -> Void;
 }
 
 // ClientRpc functions are invoked without an instance, so they only route to CampaignSync.
@@ -102,6 +106,49 @@ public class CampaignClient extends ClientRpc {
         let dialog = CampaignDialog.Get();
         if IsDefined(dialog) {
             dialog.OnSceneState(tier, x, y, z);
+        }
+    }
+
+    // Stage 5: NPCs and combat (CampaignCombat).
+    public func ApplyNpcs(entries: String) -> Void {
+        let combat = CampaignCombat.Get();
+        if IsDefined(combat) {
+            combat.ApplyNpcs(entries);
+        }
+    }
+
+    public func ApplyNpcHits(entries: String) -> Void {
+        let combat = CampaignCombat.Get();
+        if IsDefined(combat) {
+            combat.ApplyNpcHits(entries);
+        }
+    }
+
+    public func CoopPlayers(count: Int32) -> Void {
+        let combat = CampaignCombat.Get();
+        if IsDefined(combat) {
+            combat.SetCoopPlayers(count);
+        }
+    }
+
+    public func PlayerDowned(puppetId: Uint64, downed: Bool) -> Void {
+        let combat = CampaignCombat.Get();
+        if IsDefined(combat) {
+            combat.OnPlayerDowned(puppetId, downed);
+        }
+    }
+
+    public func Revived(health: Float) -> Void {
+        let combat = CampaignCombat.Get();
+        if IsDefined(combat) {
+            combat.OnRevived(health);
+        }
+    }
+
+    public func CoopWipe(reason: Int32) -> Void {
+        let combat = CampaignCombat.Get();
+        if IsDefined(combat) {
+            combat.OnWipe();
         }
     }
 }
@@ -211,6 +258,10 @@ public class CampaignSync extends ScriptableSystem {
 
     public func IsHost() -> Bool {
         return this.m_hasRole && this.m_isHost;
+    }
+
+    public func IsGuest() -> Bool {
+        return this.m_hasRole && !this.m_isHost;
     }
 
     public func SetRole(isHost: Bool) -> Void {

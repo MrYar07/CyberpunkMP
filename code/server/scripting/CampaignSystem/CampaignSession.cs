@@ -141,6 +141,7 @@ namespace CampaignSystem
         private bool hostInWorld;
 
         internal CampaignLobby Lobby { get; }
+        internal CampaignCombat Combat { get; }
 
         // Set once the host has sent its whole snapshot. Until then guests are not sent
         // state, because anything missing would be read as "unset" and wipe their facts.
@@ -160,6 +161,7 @@ namespace CampaignSystem
             watchedFacts = LoadFactList();
             Lobby = new CampaignLobby();
             Lobby.HostChanged += OnHostChanged;
+            Combat = new CampaignCombat(sync, () => hostId, () => hostInWorld, Voters);
 
             Server.PlayerSystem.PlayerJoinEvent += OnPlayerJoin;
             Server.PlayerSystem.PlayerLeftEvent += OnPlayerLeft;
@@ -181,6 +183,8 @@ namespace CampaignSystem
             lock (sync)
             {
                 Lobby.Leave(playerId);
+                Combat.PlayerLeft(playerId);
+                Combat.WorldChanged();
             }
         }
 
@@ -208,6 +212,7 @@ namespace CampaignSystem
             {
                 Lobby.SetInWorld(playerId, true);
                 EnterWorldLocked(playerId);
+                Combat.WorldChanged();
             }
         }
 
@@ -217,6 +222,7 @@ namespace CampaignSystem
             lock (sync)
             {
                 Lobby.SetInWorld(playerId, false);
+                Combat.WorldChanged();
 
                 if (playerId == hostId && hostInWorld)
                 {
@@ -269,6 +275,7 @@ namespace CampaignSystem
 
             logger.Info($"Player {playerId} is now the campaign host");
             CampaignClient.SetRole(playerId, true);
+            Combat.HostEntered();
 
             // The host answers the last batch with ReportSnapshotDone, so send at least one.
             var batches = Batches(watchedFacts).ToList();
