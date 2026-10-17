@@ -85,6 +85,11 @@ namespace Cyberpunk.Rpc.Server.Plugins
             CampaignSystem.Plugin.Instance.Session.ReportQuestNodes(playerId, entries);
         }
 
+        public static partial void ReportTracked_Impl(ulong playerId, uint hash)
+        {
+            CampaignSystem.Plugin.Instance.Session.ReportTracked(playerId, hash);
+        }
+
         public static partial void ReportCharacterPart_Impl(ulong playerId, string key, string value)
         {
             lock (CampaignSystem.CampaignSession.Sync)
@@ -135,6 +140,9 @@ namespace CampaignSystem
 
         private readonly Dictionary<uint, int> journal = new();
         private readonly Dictionary<string, int> facts = new();
+
+        // The objective the host's game tracks (HUD, map pin, route); 0 = none.
+        private uint tracked;
         private readonly List<string> watchedFacts;
 
         private ulong? hostId;
@@ -281,6 +289,7 @@ namespace CampaignSystem
             // snapshot refill it.
             journal.Clear();
             facts.Clear();
+            tracked = 0;
 
             logger.Info($"Player {playerId} is now the campaign host");
             CampaignClient.SetRole(playerId, true);
@@ -305,6 +314,10 @@ namespace CampaignSystem
             var known = watchedFacts.Concat(facts.Keys).Distinct();
             foreach (var batch in Batches(known.Select(name => $"{name}:{facts.GetValueOrDefault(name)}")))
                 CampaignClient.ApplyFactBatch(playerId, batch);
+
+            // After the journal: the objective has to exist in the guest's journal to be tracked.
+            if (tracked != 0)
+                CampaignClient.ApplyTracked(playerId, tracked);
         }
 
         internal void ReportJournal(ulong playerId, uint hash, int state)
@@ -461,6 +474,22 @@ namespace CampaignSystem
             {
                 if (playerId == hostId && hostInWorld)
                     SetScene(tier, x, y, z);
+            }
+        }
+
+        internal void ReportTracked(ulong playerId, uint hash)
+        {
+            lock (sync)
+            {
+                if (playerId != hostId || tracked == hash)
+                    return;
+
+                tracked = hash;
+                if (snapshotReady && hash != 0)
+                {
+                    foreach (var id in Guests())
+                        CampaignClient.ApplyTracked(id, hash);
+                }
             }
         }
 

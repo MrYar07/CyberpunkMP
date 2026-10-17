@@ -210,6 +210,19 @@ public static class CampaignClient
 		}
 	}
 
+	[ClientRpc(Class = 6609351954351555900, Function = 17042477685144651857)]
+	public static void ApplyTracked(ulong playerId, uint hash)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteUint32(hash);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 17042477685144651857, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
 	[ClientRpc(Class = 6609351954351555900, Function = 7024938318003918543)]
 	public static void ReplayQuestNodes(ulong playerId, string entries)
 	{

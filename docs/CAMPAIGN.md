@@ -92,6 +92,16 @@ python tools/campaign/extract_facts.py --game "<Cyberpunk 2077>" ^
 Zmiany lokalne na serwerze: `config/campaign_facts.txt` — `nazwa` dodaje fakt,
 `-nazwa` go usuwa.
 
+### Śledzony cel (HUD, znacznik, trasa)
+
+Licznik celu na HUD-zie, pinezka na mapie i trasa na minimapie pokazują tylko śledzony cel.
+Host co 0,25 s sprawdza `JournalManager.GetTrackedEntry()` i zgłasza zmianę
+(`ReportTracked` → `ApplyTracked`); serwer pamięta ostatni i wysyła go spóźnionym po
+dzienniku. Gra gościa śledzi ten sam cel (`TrackEntry`), gdy ten jest u niej aktywny — jeśli
+wpis dziennika jeszcze nie doszedł, próbuje ponownie po każdej zmianie dziennika. Host bez
+śledzonego celu nic nie zmienia u gości; gość może przełączyć śledzenie sam, do następnej
+zmiany u hosta.
+
 ## Lobby i zapis kampanii
 
 - Połączenie z serwerem działa w menu głównym. Zmiany w rdzeniu CyberpunkMP (minimalne):

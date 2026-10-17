@@ -32,6 +32,7 @@ public native class CampaignServer extends ServerRpc {
     public static native func ReportDialogClosed() -> Void;
     public static native func ReportScene(tier: Int32, x: Float, y: Float, z: Float) -> Void;
     public static native func ReportQuestNodes(entries: String) -> Void;
+    public static native func ReportTracked(hash: Uint32) -> Void;
     public static native func ReportNpcs(entries: String) -> Void;
     public static native func ReportNpcHits(entries: String) -> Void;
     public static native func ReportDowned(downed: Bool) -> Void;
@@ -62,6 +63,10 @@ public class CampaignClient extends ClientRpc {
 
     public func ApplyFactBatch(entries: String) -> Void {
         CampaignSync.Get().ApplyFactBatch(entries);
+    }
+
+    public func ApplyTracked(hash: Uint32) -> Void {
+        CampaignSync.Get().ApplyTracked(hash);
     }
 
     // The server sends the watch list in batches; the last one closes the host's snapshot.
@@ -273,6 +278,10 @@ public class CampaignSync extends ScriptableSystem {
     private let m_watchers: array<ref<CampaignFactWatcher>>;
     private let m_factSnapshot: ref<CampaignFactBatch>;
     private let m_questNodesPolling: Bool;
+    // Host: the objective last reported as tracked. Guest: the host's, until it can be tracked
+    // here (its journal entry may arrive after it).
+    private let m_trackedHash: Uint32;
+    private let m_trackedPending: Bool;
 
     public static func Get() -> ref<CampaignSync> {
         let container = GameInstance.GetScriptableSystemsContainer(GetGameInstance());
@@ -302,6 +311,8 @@ public class CampaignSync extends ScriptableSystem {
         this.m_isHost = isHost;
         this.ClearWatchers();
         this.m_factSnapshot = null;
+        this.m_trackedHash = 0u;
+        this.m_trackedPending = false;
 
         // The host records the scenes, calls and world changes its quests run; guests run them.
         GameInstance.GetNetworkWorldSystem().SetQuestMirror(isHost ? 1 : 2);
@@ -338,7 +349,20 @@ public class CampaignSync extends ScriptableSystem {
         if StrLen(entries) > 0 {
             CampaignSync.SendQuestNodes(entries);
         }
+        this.CheckTracked();
         GameInstance.GetDelaySystem(this.GetGameInstance()).DelayCallback(new CampaignQuestNodesPoll(), CampaignSync.QuestNodesSeconds(), false);
+    }
+
+    // The objective on the HUD (and its map pin and route) follows the host's: the host's
+    // game picks it as the story moves on, the guests' games track the same one.
+    private func CheckTracked() -> Void {
+        let journal = GameInstance.GetJournalManager(this.GetGameInstance());
+        let entry = journal.GetTrackedEntry();
+        let hash = IsDefined(entry) ? Cast<Uint32>(journal.GetEntryHash(entry)) : 0u;
+        if hash != this.m_trackedHash {
+            this.m_trackedHash = hash;
+            CampaignServer.ReportTracked(hash);
+        }
     }
 
     // Split at entry boundaries into pieces under the batch limit.
@@ -489,6 +513,7 @@ public class CampaignSync extends ScriptableSystem {
             return;
         }
         journal.ChangeEntryStateByHash(hash, target, JournalNotifyOption.Notify);
+        this.TryTrack();
     }
 
     public func ApplyJournalBatch(entries: String) -> Void {
@@ -499,6 +524,31 @@ public class CampaignSync extends ScriptableSystem {
         while i < ArraySize(hashes) {
             this.ApplyJournal(Cast<Uint32>(StringToUint64(hashes[i])), states[i]);
             i += 1;
+        }
+    }
+
+    // 0 = the host tracks nothing: whatever the guest tracks stays.
+    public func ApplyTracked(hash: Uint32) -> Void {
+        if this.IsHost() || hash == 0u {
+            return;
+        }
+        this.m_trackedHash = hash;
+        this.m_trackedPending = true;
+        this.TryTrack();
+    }
+
+    private func TryTrack() -> Void {
+        if !this.m_trackedPending {
+            return;
+        }
+        let journal = GameInstance.GetJournalManager(this.GetGameInstance());
+        let entry = journal.GetEntry(this.m_trackedHash);
+        if !IsDefined(entry) || !Equals(journal.GetEntryState(entry), gameJournalEntryState.Active) {
+            return;
+        }
+        this.m_trackedPending = false;
+        if !journal.IsEntryTracked(entry) {
+            journal.TrackEntry(entry);
         }
     }
 

@@ -214,6 +214,17 @@ public static partial class CampaignServer
 
 	public static partial void ReportQuestNodes_Impl(ulong playerId, string entries);
 
+	[ServerRpc(Class = 17961805562553929976, Function = 514327149429845691)]
+	public static void ReportTracked(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+		var hash = data.ReadUint32();
+
+		ReportTracked_Impl(playerId, hash);
+	}
+
+	public static partial void ReportTracked_Impl(ulong playerId, uint hash);
+
 	[ServerRpc(Class = 17961805562553929976, Function = 16813903836054539307)]
 	public static void ReportNpcs(ulong playerId, IBuffer data)
 	{
