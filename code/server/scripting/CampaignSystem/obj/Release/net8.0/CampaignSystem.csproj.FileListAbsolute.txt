@@ -1,0 +1,16 @@
+C:\Users\Rozer\Desktop\cyberpunkcoop\campaign\code\server\scripting\CampaignSystem\bin\Release\net8.0\CampaignSystem.deps.json
+C:\Users\Rozer\Desktop\cyberpunkcoop\campaign\code\server\scripting\CampaignSystem\bin\Release\net8.0\CampaignSystem.dll
+C:\Users\Rozer\Desktop\cyberpunkcoop\campaign\code\server\scripting\CampaignSystem\bin\Release\net8.0\CampaignSystem.pdb
+C:\Users\Rozer\Desktop\cyberpunkcoop\campaign\code\server\scripting\CampaignSystem\bin\Release\net8.0\CyberpunkSdk.dll
+C:\Users\Rozer\Desktop\cyberpunkcoop\campaign\code\server\scripting\CampaignSystem\bin\Release\net8.0\CyberpunkSdk.pdb
+C:\Users\Rozer\Desktop\cyberpunkcoop\campaign\code\server\scripting\CampaignSystem\obj\Release\net8.0\CampaignSystem.csproj.AssemblyReference.cache
+C:\Users\Rozer\Desktop\cyberpunkcoop\campaign\code\server\scripting\CampaignSystem\obj\Release\net8.0\CampaignSystem.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Rozer\Desktop\cyberpunkcoop\campaign\code\server\scripting\CampaignSystem\obj\Release\net8.0\CampaignSystem.AssemblyInfoInputs.cache
+C:\Users\Rozer\Desktop\cyberpunkcoop\campaign\code\server\scripting\CampaignSystem\obj\Release\net8.0\CampaignSystem.AssemblyInfo.cs
+C:\Users\Rozer\Desktop\cyberpunkcoop\campaign\code\server\scripting\CampaignSystem\obj\Release\net8.0\CampaignSystem.csproj.CoreCompileInputs.cache
+C:\Users\Rozer\Desktop\cyberpunkcoop\campaign\code\server\scripting\CampaignSystem\obj\Release\net8.0\CampaignSystem.sourcelink.json
+C:\Users\Rozer\Desktop\cyberpunkcoop\campaign\code\server\scripting\CampaignSystem\obj\Release\net8.0\Campaign.F3AA3013.Up2Date
+C:\Users\Rozer\Desktop\cyberpunkcoop\campaign\code\server\scripting\CampaignSystem\obj\Release\net8.0\CampaignSystem.dll
+C:\Users\Rozer\Desktop\cyberpunkcoop\campaign\code\server\scripting\CampaignSystem\obj\Release\net8.0\refint\CampaignSystem.dll
+C:\Users\Rozer\Desktop\cyberpunkcoop\campaign\code\server\scripting\CampaignSystem\obj\Release\net8.0\CampaignSystem.pdb
+C:\Users\Rozer\Desktop\cyberpunkcoop\campaign\code\server\scripting\CampaignSystem\obj\Release\net8.0\ref\CampaignSystem.dll
