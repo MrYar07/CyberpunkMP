@@ -15,6 +15,7 @@ import CyberpunkMP.World.*
 //     /coop move <n> <right> <forward> [up] [yaw]   nudge extra n (meters, degrees left)
 //     /coop save                        store the poses for this scene on the server
 //     /coop clear                       remove this scene's stored poses
+//     /coop hide                        nobody else in this scene (intimate scenes)
 //     /coop where                       this V's position (for the mission notes)
 
 public class CampaignScenePoses {
@@ -117,9 +118,9 @@ public class CampaignStory extends ScriptableSystem {
             CampaignServer.ReportHostMode(mode);
         }
 
-        // In a braindance the camera, not V, moves.
+        // In a braindance the camera, not V, moves; in a vehicle (AV flights) V really travels.
         let position = player.GetWorldPosition();
-        if this.m_hasLast && mode != 1 && Vector4.Distance(position, this.m_lastPosition) > CampaignStory.JumpDistance() {
+        if this.m_hasLast && mode != 1 && !IsDefined(player.GetMountedVehicle()) && Vector4.Distance(position, this.m_lastPosition) > CampaignStory.JumpDistance() {
             let from = this.m_lastPosition;
             CampaignServer.ReportTeleport(from.X, from.Y, from.Z, position.X, position.Y, position.Z);
             LogChannel(n"DEBUG", s"[Campaign] the host jumped \(RoundF(Vector4.Distance(position, from))) m, guests nearby follow");
@@ -281,12 +282,17 @@ public class CampaignStory extends ScriptableSystem {
             this.Reply(s"saved for \(scene): \(poses)");
             return;
         }
+        if Equals(verb, "hide") {
+            CampaignServer.SaveScenePoses(scene, "hide");
+            this.Reply(s"other players hidden in \(scene)");
+            return;
+        }
         if Equals(verb, "clear") {
             CampaignServer.SaveScenePoses(scene, "");
             this.Reply(s"poses removed for \(scene)");
             return;
         }
-        this.Reply("/coop scene | move <n> <right> <forward> [up] [yaw] | save | clear | where");
+        this.Reply("/coop scene | move <n> <right> <forward> [up] [yaw] | save | clear | hide | where");
     }
 
     // Shown in this player's chat only.

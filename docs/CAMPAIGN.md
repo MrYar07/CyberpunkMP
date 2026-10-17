@@ -137,8 +137,9 @@ Zmiany lokalne na serwerze: `config/campaign_facts.txt` — `nazwa` dodaje fakt,
    wybiera gra hosta.
 5. **NPC i walka** (zrobione): zdrowie i śmierć wrogów od hosta, trafienia gości u hosta,
    powalenie i ożywianie graczy (opis niżej).
-6. **Przejście kampanii misja po misji**, potem Phantom Liberty. Łatki na sceny, które
-   zakładają jednego V (Johnny, braindance, Songbird).
+6. **Przejście kampanii misja po misji** (narzędzia zrobione, misje — w fazie testowej):
+   tryby hosta (braindance, Johnny), przegrupowanie po szybkiej podróży, pozy statystów
+   per scena z komendami `/coop`, lista misji z ryzykami w `docs/MISSIONS.md`.
 
 ### Lobby (etap 3, zrobione — opis działania wyżej w „Jak grać” i „Lobby i zapis kampanii”)
 
@@ -313,6 +314,36 @@ Do sprawdzenia w fazie testowej: czy `Immortal` zatrzymuje zdrowie V powyżej 0 
 puli to widzi (próg 1%); czy dopasowanie po rekordzie i pozycji łączy właściwe kopie przy
 falach wrogów (DSS w Phantom Liberty); koszt `GetAttitudeTowards` dla wielu NPC; czy
 zastępcy z rekordu mają broń i AI walki; brak fizycznego „czołgania” (tylko przykucnięcie).
+
+## Kampania (etap 6)
+
+Lista misji, mechanik zakładających jednego V i sposób testowania: `docs/MISSIONS.md`.
+Kod: `Plugins/CampaignStory.reds`, serwer `CampaignStory.cs`.
+
+- **Tryb hosta** (`ReportHostMode` → `HostMode`): host zgłasza, co robi jego V. 1 =
+  braindance (`BraindanceSystem.GetIsInBraindance`) — goście są zatrzymani i nietykalni z
+  komunikatem, aż host skończy; 2 = host gra Johnnym (`IsJohnnyReplacer`) — goście tylko
+  dostają komunikat i grają dalej jako jego ekipa. Host wychodzi ze świata → tryb 0.
+- **Przegrupowanie** (`ReportTeleport` → `HostTeleported`): V hosta przeskoczył >150 m
+  między dwoma odczytami co 0,5 s (szybka podróż, metro, teleport questa) → goście, którzy
+  byli ≤150 m od miejsca startu, są przenoszeni 2 m obok miejsca docelowego. Gość w aucie
+  dostaje komunikat zamiast przeniesienia.
+- **Pozy statystów per scena**: QuestMirror zapamiętuje klucz ostatniej sceny
+  (`<hash zasobu>/<węzły faz>/<węzeł>`, ten sam w każdej grze; natywne `GetSceneKey`).
+  Serwer trzyma tabelę `klucz=prawo:przód:góra:obrót|…` (metry i stopnie względem V w chwili
+  rozstawienia; domyślna `campaign_scenes.txt` wbudowana w plugin, lokalna
+  `config/campaign_scenes.txt` wygrywa) i wysyła ją graczom przy wejściu do świata
+  (`ScenePoses`). CampaignExtras stawia statystę nr N na pozie N (auto ma pierwszeństwo),
+  `hide` = nikt inny w scenie. Komendy czatu (widoczne tylko u siebie):
+  `/coop scene` (klucz i bieżące pozy), `/coop move <n> <prawo> <przód> [góra] [obrót]`,
+  `/coop save`, `/coop clear`, `/coop hide`, `/coop where`. Czat przekazuje linie `/…`
+  systemom z `ChatController.CommandSystems()` jako `ChatCommandRequest` (mała zmiana
+  rdzenia — redscript nie pozwala wrapować skryptowych klas z tej samej kompilacji).
+
+Do sprawdzenia w fazie testowej: czy czat da się otworzyć w trakcie sceny (jeśli nie —
+pozy po scenie nie mają sensu, potrzebny skrót klawiszowy); czy `GetIsInBraindance` jest
+prawdą przez cały BD; skok w pojeździe nie przegrupowuje (loty AV), więc teleport questa z
+hostem w aucie nie zabierze gości.
 
 ## Budowanie
 

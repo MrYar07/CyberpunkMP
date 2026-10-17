@@ -311,6 +311,15 @@ public class CampaignExtras extends ScriptableSystem {
             return false;
         }
         let poses = story.GetPoses(this.m_sceneKey);
+        // "hide": nobody else in this scene (intimate scenes) - out of sight behind V.
+        if ArraySize(poses) > 0 && Equals(poses[0], "hide") {
+            extra.right = 0.0;
+            extra.forward = -25.0;
+            extra.up = 0.0;
+            extra.yaw = 0.0;
+            this.ApplyPose(extra);
+            return true;
+        }
         if extra.slot >= ArraySize(poses) {
             return false;
         }
