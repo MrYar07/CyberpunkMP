@@ -14,8 +14,10 @@ podbierania pojedynczych poprawek.
    host, wybór, gracze). Pierwszy gracz w lobby jest hostem.
 3. Host wybiera **NEW CAMPAIGN** albo **LOAD <nazwa>** (kolejne kliknięcia przełączają
    zapisane kampanie), goście klikają **READY**, host **START**.
-4. Nowa kampania: głosowanie nad ścieżką życia (pozycje **VOTE: …** w menu). Potem
-   każdy przechodzi kreator postaci — wybrać da się tylko wygraną ścieżkę życia. Host gra
+4. Nowa kampania: wszyscy przechodzą do nowej gry (start, trudność). Na ekranie
+   „Przeszłość postaci” kliknięcie kafelka to głos (można go zmienić), przy kafelkach
+   licznik `głosy/gracze`. Gdy zagłosują wszyscy (albo 15 s po pierwszym głosie), wygrana
+   ścieżka ustawia się każdemu i ekran przechodzi dalej do kreatora. Host gra
    normalny start (przycisk gry podstawowej), goście start „Phantom Liberty”, który mod
    podmienia na pusty świat bez questów (patrz niżej).
 5. Wczytanie kampanii: host wczytuje swój zapis gry w zwykłym menu „Wczytaj”. Goście
@@ -95,7 +97,9 @@ Zmiany lokalne na serwerze: `config/campaign_facts.txt` — `nazwa` dodaje fakt,
   `CampaignLobby` (żyje w menu i w grze, w przeciwieństwie do ScriptableSystemów).
 - Głosowanie (`CampaignVote.cs`): wspólne dla ścieżki życia i (etap 4) dialogów. RPC
   `VoteOpened`/`VoteTally`/`VoteClosed`, głos `CastVote`. Kończy się po 15 s albo gdy
-  zagłosują wszyscy.
+  zagłosują wszyscy; głosowanie nad ścieżką życia liczy czas dopiero od pierwszego głosu.
+- „W grze” = zdarzenie Codeware `Session/Ready` z `IsPreGame() == false`. Menu główne też
+  jest światem z graczem, więc `OnWorldAttached`/`OnPlayerAttach` się do tego nie nadają.
 - Zapis kampanii: `campaigns/<nazwa>.json` obok serwera (nazwa: `<host>-<data>`). Pola:
   `Host`, `LifePath`, `Players[nazwa]` = słownik pól postaci od klienta. Klient wysyła
   postać co 2 minuty gry (`ReportCharacterPart` + `ReportCharacterDone`, długie pola w
