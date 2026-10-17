@@ -20,6 +20,13 @@ public native class NetworkWorldSystem extends IGameSystem {
     public native func SetChoiceLock(locked: Bool) -> Void;
     public native func TakeBlockedChoiceConfirms() -> Int32;
     public native func InjectChoice(steps: Int32) -> Bool;
+    // Campaign scenes: the host records the quest nodes players see or hear (mode 1), guests
+    // run the same nodes (mode 2); 0 = off.
+    public native func SetQuestMirror(mode: Int32) -> Void;
+    public native func TakeQuestNodes() -> String;
+    public native func ReplayQuestNodes(entries: String) -> Void;
+    // Other players' characters near the scene spot (anchor, facing forward) stand beside it.
+    public native func SetSceneSpacing(enabled: Bool, anchor: Vector4, forward: Vector4) -> Void;
     public native func GetEntityIdByServerId(serverId: Uint64) -> EntityID;
     public native func GetAppearanceSystem() -> ref<AppearanceSystem>;
     public native func GetChatSystem() -> ref<ChatSystem>;

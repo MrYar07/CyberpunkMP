@@ -57,6 +57,11 @@ struct NetworkWorldSystem : RED4ext::IGameSystem, Core::HookingAgent, flecs::wor
     void SetChoiceLock(bool aLocked);
     int32_t TakeBlockedChoiceConfirms();
     bool InjectChoice(int32_t aSteps);
+    // Campaign scenes on guests (QuestMirror) and other players' characters during them.
+    void SetQuestMirror(int32_t aMode);
+    Red::CString TakeQuestNodes();
+    void ReplayQuestNodes(const Red::CString& aEntries);
+    void SetSceneSpacing(bool aEnabled, const Red::Vector4& aAnchor, const Red::Vector4& aForward);
     void OnConnected();
     void OnDisconnected(Client::EDisconnectReason);
 
@@ -100,6 +105,10 @@ RTTI_DEFINE_CLASS(NetworkWorldSystem, {
     RTTI_METHOD(SetChoiceLock);
     RTTI_METHOD(TakeBlockedChoiceConfirms);
     RTTI_METHOD(InjectChoice);
+    RTTI_METHOD(SetQuestMirror);
+    RTTI_METHOD(TakeQuestNodes);
+    RTTI_METHOD(ReplayQuestNodes);
+    RTTI_METHOD(SetSceneSpacing);
     RTTI_METHOD(GetEntityIdByServerId);
     RTTI_METHOD(GetAppearanceSystem);
     RTTI_METHOD(GetInterpolationSystem);

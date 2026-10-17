@@ -7,13 +7,17 @@ import CyberpunkMP.World.*
 //
 // Dialogs: the host's game shows dialog options as usual. When the players are together in
 // the world, the host reports them and the server opens a vote ("dialog", CampaignVote.cs).
-// Meanwhile the host's confirm key only counts as the host's vote for the highlighted option
-// (NetworkWorldSystem.SetChoiceLock); guests get the same options in the game's own dialog
-// box. When the vote closes, the host's game picks the winner by itself (InjectChoice: key
-// presses, as a player would). Nobody voted: the host picks as usual.
+// Guests run the same scenes (QuestMirror), so their games usually show the same options.
+// Every game showing them votes in its own dialog box: the confirm key only counts as a vote
+// for the highlighted option (NetworkWorldSystem.SetChoiceLock), and when the vote closes
+// each game picks the winner by itself (InjectChoice: key presses, as a player would). A
+// guest whose game shows no options (its scene did not start) votes in a stand-in box.
+// Nobody voted: the host picks as usual, and the guests' games follow through QuestMirror.
 //
 // Scenes: the host reports its scene tier (GameplayTier) and position. Guests far away are
-// brought over when a scene starts, and held in place while a cinematic one runs.
+// brought over when a scene starts; a guest whose own scene did not start is held in place
+// while a cinematic one runs. During any scene, other players' characters stand beside the
+// local V instead of on the scene's spot (SetSceneSpacing).
 
 public class CampaignDialogPoll extends DelayCallback {
     public func Call() -> Void {
@@ -24,12 +28,23 @@ public class CampaignDialogPoll extends DelayCallback {
     }
 }
 
+public class CampaignScenePoll extends DelayCallback {
+    public func Call() -> Void {
+        let dialog = CampaignDialog.Get();
+        if IsDefined(dialog) {
+            dialog.OnScenePoll();
+        }
+    }
+}
+
 public class CampaignDialog extends ScriptableSystem {
     public static func PollSeconds() -> Float = 0.1
     // A guest further than this from the host when a scene starts is brought over.
     public static func SceneRange() -> Float = 25.0
     // The guest's own dialog box, while it shows a vote.
     public static func GuestHubId() -> Int32 = 77000
+    // How often the spot other players stand beside follows the local V during a scene.
+    public static func ScenePollSeconds() -> Float = 1.0
 
     private let m_hubsListener: ref<CallbackHandle>;
     private let m_activeHubListener: ref<CallbackHandle>;
@@ -44,6 +59,8 @@ public class CampaignDialog extends ScriptableSystem {
     private let m_counts: array<Int32>;
     private let m_myVote: Int32;
     private let m_polling: Bool;
+    // This game votes in its own dialog box (rather than the stand-in box).
+    private let m_native: Bool;
 
     // ---- guest: our own dialog box ----
     private let m_guestSelected: Int32;
@@ -52,6 +69,8 @@ public class CampaignDialog extends ScriptableSystem {
     // ---- scenes ----
     private let m_held: Bool;
     private let m_hostTier: Int32;
+    private let m_localTier: Int32;
+    private let m_scenePolling: Bool;
 
     public static func Get() -> ref<CampaignDialog> {
         let container = GameInstance.GetScriptableSystemsContainer(GetGameInstance());
@@ -92,12 +111,40 @@ public class CampaignDialog extends ScriptableSystem {
 
     protected cb func OnHubsChanged(value: Variant) -> Bool {
         this.CheckHostDialog();
+        this.CheckGuestDialog();
         return false;
     }
 
     protected cb func OnActiveHubChanged(value: Int32) -> Bool {
         this.CheckHostDialog();
+        this.CheckGuestDialog();
         return false;
+    }
+
+    // A guest's own scene can show the options after the vote opened: move from the stand-in
+    // box to the real one.
+    private func CheckGuestDialog() -> Void {
+        if !this.m_voteOpen || this.m_native || this.IsHost() {
+            return;
+        }
+        if this.LocalOptionCount() == ArraySize(this.m_options) {
+            this.ListenGuestInput(false);
+            this.UseNativeBox();
+        }
+    }
+
+    // Options in this game's own dialog box (not our stand-in box).
+    private func LocalOptionCount() -> Int32 {
+        let activeHub = this.Interactions().GetInt(GetAllBlackboardDefs().UIInteractions.ActiveChoiceHubID);
+        if activeHub < 0 || activeHub == CampaignDialog.GuestHubId() {
+            return 0;
+        }
+        let hubs = this.Hubs();
+        let count = 0;
+        for hub in hubs.choiceHubs {
+            count += ArraySize(hub.choices);
+        }
+        return count;
     }
 
     // Only a dialog the player is actually in (an active hub) is voted on; options merely in
@@ -152,7 +199,7 @@ public class CampaignDialog extends ScriptableSystem {
     }
 
     // The highlighted option, counted across all hubs (the order the options were reported in).
-    private func HostSelection() -> Int32 {
+    private func LocalSelection() -> Int32 {
         let def = GetAllBlackboardDefs().UIInteractions;
         let blackboard = this.Interactions();
         let activeHub = blackboard.GetInt(def.ActiveChoiceHubID);
@@ -175,6 +222,7 @@ public class CampaignDialog extends ScriptableSystem {
     }
 
     public func IsVoting() -> Bool = this.m_voteOpen
+    public func IsNative() -> Bool = this.m_native
 
     public func OnVoteOpened(voteId: Uint32, options: String, seconds: Int32) -> Void {
         this.m_voteId = voteId;
@@ -187,15 +235,21 @@ public class CampaignDialog extends ScriptableSystem {
         }
         LogChannel(n"DEBUG", s"[Campaign] dialog vote \(voteId): \(ArraySize(this.m_options)) options, \(seconds)s");
 
-        if this.IsHost() {
-            GameInstance.GetNetworkWorldSystem().SetChoiceLock(true);
-            this.StartPolling();
-            this.RefreshHost();
+        if this.IsHost() || this.LocalOptionCount() == ArraySize(this.m_options) {
+            this.UseNativeBox();
         } else {
+            this.m_native = false;
             this.m_guestSelected = this.FirstAvailable();
             this.ListenGuestInput(true);
             this.ShowGuestHub();
         }
+    }
+
+    private func UseNativeBox() -> Void {
+        this.m_native = true;
+        GameInstance.GetNetworkWorldSystem().SetChoiceLock(true);
+        this.StartPolling();
+        this.RefreshDialog();
     }
 
     public func OnVoteTally(voteId: Uint32, counts: String) -> Void {
@@ -206,8 +260,8 @@ public class CampaignDialog extends ScriptableSystem {
         for count in StrSplit(counts, ",") {
             ArrayPush(this.m_counts, StringToInt(count));
         }
-        if this.IsHost() {
-            this.RefreshHost();
+        if this.m_native {
+            this.RefreshDialog();
         } else {
             this.ShowGuestHub();
         }
@@ -217,23 +271,23 @@ public class CampaignDialog extends ScriptableSystem {
         if !this.OwnsVote(voteId) {
             return;
         }
-        let isHost = this.IsHost();
+        let native = this.m_native;
         this.EndVote();
 
-        if !isHost {
+        if !native {
             return;
         }
-        this.RefreshHost();
+        this.RefreshDialog();
 
         // The dialog may have closed meanwhile; then there is nothing left to pick.
-        let current = this.HostSelection();
+        let current = this.LocalSelection();
         if winner < 0 || current < 0 {
             LogChannel(n"DEBUG", s"[Campaign] dialog vote \(voteId) closed without a pick, the host chooses");
             return;
         }
         LogChannel(n"DEBUG", s"[Campaign] dialog vote \(voteId): option \(winner + 1) won, picking it");
         if !GameInstance.GetNetworkWorldSystem().InjectChoice(winner - current) {
-            LogChannel(n"DEBUG", "[Campaign] cannot pick dialog options on this game, the host chooses");
+            LogChannel(n"DEBUG", "[Campaign] cannot pick dialog options on this game, pick it by hand");
         }
     }
 
@@ -242,6 +296,7 @@ public class CampaignDialog extends ScriptableSystem {
             return;
         }
         this.m_voteOpen = false;
+        this.m_native = false;
         let network = GameInstance.GetNetworkWorldSystem();
         if IsDefined(network) {
             network.SetChoiceLock(false);
@@ -285,7 +340,7 @@ public class CampaignDialog extends ScriptableSystem {
         return suffix;
     }
 
-    // ---- host: own vote and the counts on the game's dialog box ----
+    // ---- own vote and the counts on the game's own dialog box ----
 
     private func StartPolling() -> Void {
         if this.m_polling {
@@ -295,22 +350,22 @@ public class CampaignDialog extends ScriptableSystem {
         GameInstance.GetDelaySystem(this.GetGameInstance()).DelayCallback(new CampaignDialogPoll(), CampaignDialog.PollSeconds(), false);
     }
 
-    // The host's confirm presses are held back while voting; each one is a vote for the
-    // highlighted option.
+    // Confirm presses are held back while voting; each one is a vote for the highlighted
+    // option.
     public func OnPoll() -> Void {
-        if !this.m_voteOpen || !this.IsHost() {
+        if !this.m_voteOpen || !this.m_native {
             this.m_polling = false;
             return;
         }
         if GameInstance.GetNetworkWorldSystem().TakeBlockedChoiceConfirms() > 0 {
-            this.Vote(this.HostSelection());
-            this.RefreshHost();
+            this.Vote(this.LocalSelection());
+            this.RefreshDialog();
         }
         GameInstance.GetDelaySystem(this.GetGameInstance()).DelayCallback(new CampaignDialogPoll(), CampaignDialog.PollSeconds(), false);
     }
 
     // Sets the same options again so the dialog box redraws with the current counts.
-    private func RefreshHost() -> Void {
+    private func RefreshDialog() -> Void {
         let def = GetAllBlackboardDefs().UIInteractions;
         let blackboard = this.Interactions();
         blackboard.SetVariant(def.DialogChoiceHubs, blackboard.GetVariant(def.DialogChoiceHubs), true);
@@ -415,6 +470,39 @@ public class CampaignDialog extends ScriptableSystem {
 
     // ---- scenes ----
 
+    // Every game: while its own V is in a scene, other players' characters stand beside it.
+    public func OnLocalSceneTier(tier: Int32) -> Void {
+        this.m_localTier = tier;
+        if tier >= EnumInt(GameplayTier.Tier3_LimitedGameplay) {
+            // Our own scene is running: it moves V, nothing to hold.
+            this.Release();
+            if !this.m_scenePolling {
+                this.m_scenePolling = true;
+                GameInstance.GetDelaySystem(this.GetGameInstance()).DelayCallback(new CampaignScenePoll(), CampaignDialog.ScenePollSeconds(), false);
+            }
+        }
+        this.UpdateSceneSpacing();
+    }
+
+    public func OnScenePoll() -> Void {
+        if this.m_localTier < EnumInt(GameplayTier.Tier3_LimitedGameplay) {
+            this.m_scenePolling = false;
+            return;
+        }
+        this.UpdateSceneSpacing();
+        GameInstance.GetDelaySystem(this.GetGameInstance()).DelayCallback(new CampaignScenePoll(), CampaignDialog.ScenePollSeconds(), false);
+    }
+
+    private func UpdateSceneSpacing() -> Void {
+        let network = GameInstance.GetNetworkWorldSystem();
+        let player = GameInstance.GetPlayerSystem(this.GetGameInstance()).GetLocalPlayerMainGameObject();
+        if !IsDefined(network) || !IsDefined(player) {
+            return;
+        }
+        let inScene = this.m_localTier >= EnumInt(GameplayTier.Tier3_LimitedGameplay);
+        network.SetSceneSpacing(inScene, player.GetWorldPosition(), player.GetWorldForward());
+    }
+
     public func OnHostSceneTier(tier: Int32) -> Void {
         if !this.IsHost() || tier == this.m_hostTier {
             return;
@@ -448,7 +536,8 @@ public class CampaignDialog extends ScriptableSystem {
             }
         }
 
-        if tier >= EnumInt(GameplayTier.Tier4_FPPCinematic) {
+        // Held only when this game's own copy of the scene did not start.
+        if tier >= EnumInt(GameplayTier.Tier4_FPPCinematic) && this.m_localTier < EnumInt(GameplayTier.Tier3_LimitedGameplay) {
             if !this.m_held {
                 this.m_held = true;
                 StatusEffectHelper.ApplyStatusEffect(player, t"GameplayRestriction.NoMovement");
@@ -474,7 +563,7 @@ public class CampaignDialog extends ScriptableSystem {
 @wrapMethod(dialogWidgetGameController)
 protected func UpdateDialogsData(const data: script_ref<DialogChoiceHubs>) -> Void {
     let dialog = CampaignDialog.Get();
-    if IsDefined(dialog) && dialog.IsVoting() && CampaignSync.Get().IsHost() {
+    if IsDefined(dialog) && dialog.IsVoting() && dialog.IsNative() {
         let decorated = dialog.Decorate(Deref(data));
         wrappedMethod(decorated);
         return;
@@ -487,6 +576,7 @@ protected cb func OnSceneTierChange(newState: Int32) -> Bool {
     let result = wrappedMethod(newState);
     let dialog = CampaignDialog.Get();
     if IsDefined(dialog) {
+        dialog.OnLocalSceneTier(newState);
         dialog.OnHostSceneTier(newState);
     }
     return result;

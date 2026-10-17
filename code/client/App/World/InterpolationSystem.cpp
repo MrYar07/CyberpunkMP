@@ -26,6 +26,29 @@
 
 #include <Math/Spline.h>
 
+namespace
+{
+constexpr float kSceneReach = 1.5f;
+constexpr float kSceneGap = 1.2f;
+
+std::atomic_bool s_sceneSpacing{false};
+glm::vec3 s_sceneAnchor{};
+float s_sceneYaw{0.f};
+
+glm::vec3 SpaceFromScene(const glm::vec3& aPosition, uint64_t aEntityHash)
+{
+    if (!s_sceneSpacing || glm::distance(aPosition, s_sceneAnchor) > kSceneReach)
+        return aPosition;
+
+    // Right of the spot's facing for one player, left for the next, further out after that.
+    const auto slot = static_cast<float>(aEntityHash % 3 + 1);
+    const auto side = aEntityHash % 2 == 0 ? 1.f : -1.f;
+    const glm::vec3 right{std::cos(s_sceneYaw), std::sin(s_sceneYaw), 0.f};
+    return s_sceneAnchor + right * (side * slot * kSceneGap);
+}
+} // namespace
+
+
 inline void ResetWithNewTransform(Red::vehicle::BaseObject* self, const Red::WorldTransform& transform)
 {
     reinterpret_cast<void (*)(Red::vehicle::BaseObject*, const Red::WorldTransform&)>(*(uintptr_t*)(*(uintptr_t*)self + 0x280))(self, transform);
@@ -120,12 +143,20 @@ void InterpolateEntity(flecs::entity aEntity, const EntityComponent& aEntityComp
             const auto deltaAngle{DeltaAngle(first.Rotation.z, second.Rotation.z, true) * ratio};
             const auto direction = Mod(first.Rotation.z + deltaAngle, 2.f * static_cast<float>(Pi));
 
-            const auto pos = Red::Vector4{position.x, position.y, position.z, 0.f};
+            const auto spaced = SpaceFromScene(position, aEntityComponent.Id.hash);
+            const auto pos = Red::Vector4{spaced.x, spaced.y, spaced.z, 0.f};
             aEntityComponent.Controller->SetTransform(pos, direction, speed);
 
             aInterpolation.PreviousFrame = InterpolationComponent::Timepoint{position, glm::vec3{0.f, 0.f, direction}, speed, static_cast<uint64_t>(tick)};
         }
     }
+}
+
+void InterpolationSystem::SetSceneSpacing(bool aEnabled, const glm::vec3& aAnchor, float aYaw)
+{
+    s_sceneAnchor = aAnchor;
+    s_sceneYaw = aYaw;
+    s_sceneSpacing = aEnabled;
 }
 
 void InterpolationSystem::OnWorldAttached(RED4ext::world::RuntimeScene* aScene)

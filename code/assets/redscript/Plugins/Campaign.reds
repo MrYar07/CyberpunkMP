@@ -31,6 +31,7 @@ public native class CampaignServer extends ServerRpc {
     public static native func ReportDialog(options: String, timed: Bool) -> Void;
     public static native func ReportDialogClosed() -> Void;
     public static native func ReportScene(tier: Int32, x: Float, y: Float, z: Float) -> Void;
+    public static native func ReportQuestNodes(entries: String) -> Void;
 }
 
 // ClientRpc functions are invoked without an instance, so they only route to CampaignSync.
@@ -88,6 +89,13 @@ public class CampaignClient extends ClientRpc {
 
     public func CharacterDone(found: Bool) -> Void {
         CampaignLobby.Get().OnCharacterDone(found);
+    }
+
+    public func ReplayQuestNodes(entries: String) -> Void {
+        let network = GameInstance.GetNetworkWorldSystem();
+        if IsDefined(network) && !CampaignSync.Get().IsHost() {
+            network.ReplayQuestNodes(entries);
+        }
     }
 
     public func SceneState(tier: Int32, x: Float, y: Float, z: Float) -> Void {
@@ -166,12 +174,25 @@ public class CampaignFactWatcher extends IScriptable {
     }
 }
 
+// Sends the quest nodes the host's game ran (QuestMirror) a few times a second.
+public class CampaignQuestNodesPoll extends DelayCallback {
+    public func Call() -> Void {
+        let sync = CampaignSync.Get();
+        if IsDefined(sync) {
+            sync.OnQuestNodesPoll();
+        }
+    }
+}
+
 public class CampaignSync extends ScriptableSystem {
+    public static func QuestNodesSeconds() -> Float = 0.25
+
     private let m_isHost: Bool;
     private let m_hasRole: Bool;
     private let m_journalListening: Bool;
     private let m_watchers: array<ref<CampaignFactWatcher>>;
     private let m_factSnapshot: ref<CampaignFactBatch>;
+    private let m_questNodesPolling: Bool;
 
     public static func Get() -> ref<CampaignSync> {
         let container = GameInstance.GetScriptableSystemsContainer(GetGameInstance());
@@ -182,6 +203,10 @@ public class CampaignSync extends ScriptableSystem {
         this.StopJournalListening();
         this.ClearWatchers();
         this.m_hasRole = false;
+        let network = GameInstance.GetNetworkWorldSystem();
+        if IsDefined(network) {
+            network.SetQuestMirror(0);
+        }
     }
 
     public func IsHost() -> Bool {
@@ -194,6 +219,12 @@ public class CampaignSync extends ScriptableSystem {
         this.ClearWatchers();
         this.m_factSnapshot = null;
 
+        // The host records the scenes, calls and world changes its quests run; guests run them.
+        GameInstance.GetNetworkWorldSystem().SetQuestMirror(isHost ? 1 : 2);
+        if isHost {
+            this.StartQuestNodesPolling();
+        }
+
         if isHost {
             LogChannel(n"DEBUG", "[Campaign] this game is the HOST - the story runs here");
             this.StartJournalListening();
@@ -205,6 +236,44 @@ public class CampaignSync extends ScriptableSystem {
     }
 
     // ---- host side ----
+
+    private func StartQuestNodesPolling() -> Void {
+        if this.m_questNodesPolling {
+            return;
+        }
+        this.m_questNodesPolling = true;
+        GameInstance.GetDelaySystem(this.GetGameInstance()).DelayCallback(new CampaignQuestNodesPoll(), CampaignSync.QuestNodesSeconds(), false);
+    }
+
+    public func OnQuestNodesPoll() -> Void {
+        if !this.IsHost() {
+            this.m_questNodesPolling = false;
+            return;
+        }
+        let entries = GameInstance.GetNetworkWorldSystem().TakeQuestNodes();
+        if StrLen(entries) > 0 {
+            CampaignSync.SendQuestNodes(entries);
+        }
+        GameInstance.GetDelaySystem(this.GetGameInstance()).DelayCallback(new CampaignQuestNodesPoll(), CampaignSync.QuestNodesSeconds(), false);
+    }
+
+    // Split at entry boundaries into pieces under the batch limit.
+    private static func SendQuestNodes(entries: String) -> Void {
+        let piece = "";
+        for entry in StrSplit(entries, ",") {
+            if StrLen(piece) + StrLen(entry) + 1 > CampaignBatch.MaxLength() {
+                CampaignServer.ReportQuestNodes(piece);
+                piece = "";
+            }
+            if StrLen(piece) > 0 {
+                piece += ",";
+            }
+            piece += entry;
+        }
+        if StrLen(piece) > 0 {
+            CampaignServer.ReportQuestNodes(piece);
+        }
+    }
 
     private func StartJournalListening() -> Void {
         if this.m_journalListening {

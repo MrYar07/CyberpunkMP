@@ -20,6 +20,7 @@
 
 #include "ChatSystem.h"
 #include "ChoiceInput.h"
+#include "QuestMirror.h"
 
 static uint64_t GTick = 0;
 
@@ -181,6 +182,7 @@ void NetworkWorldSystem::Update(uint64_t aTick)
     m_lastTick = aTick;
 
     ChoiceInput::Update();
+    QuestMirror::Update();
 
     const auto service = Core::Container::Get<NetworkService>();
     if (service && service->IsConnected())
@@ -457,6 +459,7 @@ void NetworkWorldSystem::OnInitialize(const RED4ext::JobHandle& aJob)
     m_vehicleSystem->OnInitialize(aJob);
 
     ChoiceInput::Attach();
+    QuestMirror::Attach();
 }
 
 void NetworkWorldSystem::Connect()
@@ -494,6 +497,28 @@ int32_t NetworkWorldSystem::TakeBlockedChoiceConfirms()
 bool NetworkWorldSystem::InjectChoice(int32_t aSteps)
 {
     return ChoiceInput::Inject(aSteps);
+}
+
+void NetworkWorldSystem::SetQuestMirror(int32_t aMode)
+{
+    QuestMirror::SetMode(aMode);
+}
+
+Red::CString NetworkWorldSystem::TakeQuestNodes()
+{
+    return QuestMirror::TakeRecorded();
+}
+
+void NetworkWorldSystem::ReplayQuestNodes(const Red::CString& aEntries)
+{
+    QuestMirror::Replay(aEntries);
+}
+
+void NetworkWorldSystem::SetSceneSpacing(bool aEnabled, const Red::Vector4& aAnchor, const Red::Vector4& aForward)
+{
+    // The yaw whose (cos, sin) is the spot's right: (forward.y, -forward.x) with Z up.
+    const auto yaw = std::atan2(-aForward.X, aForward.Y);
+    InterpolationSystem::SetSceneSpacing(aEnabled, glm::vec3{aAnchor.X, aAnchor.Y, aAnchor.Z}, yaw);
 }
 
 bool NetworkWorldSystem::IsConnected() const

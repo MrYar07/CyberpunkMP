@@ -210,5 +210,18 @@ public static class CampaignClient
 		}
 	}
 
+	[ClientRpc(Class = 6609351954351555900, Function = 7024938318003918543)]
+	public static void ReplayQuestNodes(ulong playerId, string entries)
+	{
+		ushort length = 0;
+		var data = IBuffer.Create();
+		try{
+			data.WriteString(entries);
+			CyberpunkSdk.Server.RpcManager.Call(playerId, 6609351954351555900, 7024938318003918543, data);
+		} finally {
+			IBuffer.Release(data);
+		}
+	}
+
 }
 }

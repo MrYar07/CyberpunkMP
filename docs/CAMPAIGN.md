@@ -51,7 +51,8 @@ podbierania pojedynczych poprawek.
 | Fakty questów | Domyślna lista (16 164 faktów: 11 083 bazy, 5 081 Phantom Liberty) jest wbudowana w plugin. Host rejestruje `QuestsSystem.RegisterListener` dla każdego faktu i wysyła wartości różne od zera. Goście dostają `SetFactStr` — także zera, więc fakty, których host nie ma, są u gościa kasowane. |
 | Pozycja, wygląd, pojazdy | To, co już robi CyberpunkMP. |
 | Dialogi | Głosowanie wszystkich graczy w świecie, wybór robi gra hosta (niżej, „Dialogi i sceny”). |
-| Sceny | Host zgłasza poziom sceny (`GameplayTier`) i pozycję; goście daleko od hosta są do niego przenoszeni, w scenach kinowych stoją w miejscu. |
+| Sceny, holorozmowy, telefony, zmiany świata | Gra gościa uruchamia te same węzły questów co gra hosta (`QuestMirror`, niżej „Sceny u gości”), więc gość widzi cutscenki swoim V i słyszy rozmowy. |
+| Pozycje w scenach | Każda gra pokazuje swoje V w miejscu V ze sceny; postacie pozostałych graczy stają obok (rozsuwanie w interpolacji). |
 
 ### Przebieg sesji
 
@@ -119,7 +120,8 @@ Zmiany lokalne na serwerze: `config/campaign_facts.txt` — `nazwa` dodaje fakt,
   ustawi, może ruszyć u gościa. Do sprawdzenia w fazie testowej.
 - Host rejestruje kilka tysięcy listenerów faktów naraz. Jeśli to okaże się za drogie,
   zamiennikiem jest natywny hook zapisu FactsDB (RED4ext).
-- NPC i walka nie są synchronizowane.
+- Walka nie jest synchronizowana. NPC pojawiają się u gości przez odtwarzane węzły questów,
+  ale ich AI liczy każda gra osobno.
 
 ## Plan
 
@@ -200,7 +202,39 @@ niż 25 m jest przenoszony 1,5 m obok hosta, od `Tier4_FPPCinematic` dostaje
 `GameplayRestriction.NoMovement` do końca sceny. Telefony i holorozmowy dzwonią tylko u
 hosta, bo goście nie mają questów.
 
-Ograniczenia: wstrzykiwane są domyślne klawisze (strzałki, F), więc przy zmienionym
+## Sceny u gości (etap 4b)
+
+Wymaganie: goście słyszą holorozmowy i telefony, widzą cutscenki i są widoczni dla innych
+w pasujących miejscach. Gra gościa nie ma questów, więc dostaje od hosta **adresy węzłów
+questów**, które gra hosta wykonała, i wykonuje te same węzły u siebie
+(`code/client/App/World/QuestMirror.cpp`):
+
+- Host: hook na `QuestPhaseInstance::ExecuteNode` (hash `3227858325`). Dla węzłów, które
+  zmieniają to, co gracz widzi lub słyszy (sceny, menedżer scen, telefon, audio, spawn i
+  encje, postacie, tłum, dane świata, pogoda, czas, efekty, obiekty interaktywne,
+  teleporty, ruch i workspoty NPC, AI, pojazdy, znaczniki mapy, nagrody), zapisuje adres:
+  hash ścieżki zasobu `.questphase`/`.quest` z fazy (`PhaseInstance+0x30`), łańcuch id
+  węzłów faz osadzonych do grafu fazy (`+0x40`), id węzła i hash nazwy gniazda wejścia.
+  Fakty i dziennik idą osobno; sterowanie przepływem, warunki i fazy zostają u hosta.
+  Sceny i telefony zgłaszane są tylko przy starcie (5 min okna), reszta z 2 s okna
+  powtórzeń.
+- Skrypt hosta co 0,25 s wysyła paczkę (`ReportQuestNodes`), serwer przekazuje ją gościom
+  w świecie (`ReplayQuestNodes`). Spóźnieni nie dostają starych węzłów.
+- Gość ładuje zasób (`ResourceLoader::LoadAsync`), znajduje węzeł i wykonuje go w fazie
+  korzenia z tym samym gniazdem — tak jak `QuestPhaseExecutor` w Codeware (struktury
+  `QuestContext` i offsety stamtąd). Kolejność zachowana (spawn przed sceną).
+- Dialogi: gra gościa zwykle pokazuje te same opcje, więc każdy głosuje we własnym oknie
+  dialogu i każda gra po głosowaniu sama wybiera zwycięzcę. Gość bez opcji (scena u niego
+  nie ruszyła) głosuje w zastępczym oknie `CO-OP VOTE` i stoi w miejscu w scenach kinowych.
+- Pozycje: podczas sceny u danego gracza (Tier3+) kukły innych graczy w promieniu 1,5 m od
+  jego V stają obok (1,2 m w prawo/lewo, kolejne dalej), punkt odświeżany co 1 s.
+
+Ograniczenia i niewiadome (do fazy testowej): czy węzeł sceny wykonany poza swoją fazą
+odtwarza scenę; czy NPC i obiekty z prefabów faz (ładowanych tylko przy aktywnej fazie)
+istnieją u gościa; czy wybudzenia węzła sceny nie są zgłaszane jako nowy start; siedzenie
+innych graczy obok (workspoty) — na razie stoją.
+
+Ograniczenia dialogów: wstrzykiwane są domyślne klawisze (strzałki, F), więc przy zmienionym
 przypisaniu `UI_MoveUp/Down` lub `DialogConfirm` na strzałki/F wybór nie zadziała; blokada
 zna tylko domyślne klawisze potwierdzenia. Goście widzą tekst opcji bez ikon testów
 umiejętności. Dialog, który po wyborze wraca z identycznymi opcjami bez zniknięcia, nie

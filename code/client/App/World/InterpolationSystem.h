@@ -16,6 +16,11 @@ struct InterpolationSystem : RED4ext::IScriptable, Core::HookingAgent
     void OnConnected();
     void OnDisconnected();
 
+    // During a scene every game shows its own V on the scene's spot, so other players'
+    // characters arrive there too. While enabled, those within reach of the spot stand
+    // beside it instead, alternating sides.
+    static void SetSceneSpacing(bool aEnabled, const glm::vec3& aAnchor, float aYaw);
+
 protected:
 
     void HandleNotifyEntityMove(const PacketEvent<server::NotifyEntityMove>& aMessage);

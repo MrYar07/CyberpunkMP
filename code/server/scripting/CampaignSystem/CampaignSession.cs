@@ -80,6 +80,11 @@ namespace Cyberpunk.Rpc.Server.Plugins
             CampaignSystem.Plugin.Instance.Session.ReportScene(playerId, tier, x, y, z);
         }
 
+        public static partial void ReportQuestNodes_Impl(ulong playerId, string entries)
+        {
+            CampaignSystem.Plugin.Instance.Session.ReportQuestNodes(playerId, entries);
+        }
+
         public static partial void ReportCharacterPart_Impl(ulong playerId, string key, string value)
         {
             lock (CampaignSystem.CampaignSession.Sync)
@@ -440,6 +445,21 @@ namespace CampaignSystem
             {
                 if (playerId == hostId && hostInWorld)
                     SetScene(tier, x, y, z);
+            }
+        }
+
+        // Quest nodes the host's game ran that change what players see or hear (scenes, calls,
+        // spawns, world changes); guests run the same nodes (QuestMirror in the client). Only
+        // guests in the world get them: an old scene must not start for someone joining later.
+        internal void ReportQuestNodes(ulong playerId, string entries)
+        {
+            lock (sync)
+            {
+                if (playerId != hostId || !hostInWorld || entries.Length == 0)
+                    return;
+
+                foreach (var id in Guests())
+                    CampaignClient.ReplayQuestNodes(id, entries);
             }
         }
 

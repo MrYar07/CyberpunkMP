@@ -203,5 +203,16 @@ public static partial class CampaignServer
 
 	public static partial void ReportScene_Impl(ulong playerId, int tier, float x, float y, float z);
 
+	[ServerRpc(Class = 17961805562553929976, Function = 3621550076095319048)]
+	public static void ReportQuestNodes(ulong playerId, IBuffer data)
+	{
+		ushort length = 0;
+		var entries = data.ReadString();
+
+		ReportQuestNodes_Impl(playerId, entries);
+	}
+
+	public static partial void ReportQuestNodes_Impl(ulong playerId, string entries);
+
 }
 }
