@@ -21,7 +21,7 @@
 #include "ChatSystem.h"
 #include "ChoiceInput.h"
 #include "QuestMirror.h"
-#include "SteamInvites.h"
+#include "CoopConnect.h"
 
 static uint64_t GTick = 0;
 
@@ -184,7 +184,7 @@ void NetworkWorldSystem::Update(uint64_t aTick)
 
     ChoiceInput::Update();
     QuestMirror::Update();
-    SteamInvites::Update(IsConnected(), m_inGame);
+    CoopConnect::Update(IsConnected(), m_inGame);
 
     const auto service = Core::Container::Get<NetworkService>();
     if (service && service->IsConnected())
@@ -462,18 +462,19 @@ void NetworkWorldSystem::OnInitialize(const RED4ext::JobHandle& aJob)
 
     ChoiceInput::Attach();
     QuestMirror::Attach();
-    SteamInvites::Attach();
+    CoopConnect::Attach();
 }
 
+// The server from the launch arguments: by address, or through the Steam tunnel.
 void NetworkWorldSystem::Connect()
 {
-    auto address = fmt::format("{}:{}", Settings::Get().ip, Settings::Get().port);
-    Core::Container::Get<NetworkService>()->Connect(address);
+    CoopConnect::ConnectConfigured();
 }
 
+// Also ends hosting (the server this game started) and the Steam tunnel.
 void NetworkWorldSystem::Disconnect()
 {
-    Core::Container::Get<NetworkService>()->Close();
+    CoopConnect::Leave();
 }
 
 bool NetworkWorldSystem::IsEnabled() const
@@ -509,7 +510,17 @@ void NetworkWorldSystem::SetQuestMirror(int32_t aMode)
 
 Red::CString NetworkWorldSystem::OpenSteamInvite()
 {
-    return SteamInvites::OpenInviteDialog();
+    return CoopConnect::OpenInviteDialog();
+}
+
+bool NetworkWorldSystem::HostCampaign()
+{
+    return CoopConnect::Host();
+}
+
+Red::CString NetworkWorldSystem::GetHostStatus()
+{
+    return CoopConnect::HostStatus();
 }
 
 Red::CString NetworkWorldSystem::GetSceneKey()

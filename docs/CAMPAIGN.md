@@ -8,9 +8,12 @@ podbierania pojedynczych poprawek.
 
 ## Jak grać
 
-1. Każdy gracz uruchamia grę z `-online -ip <adres> -port <port> -username <nazwa>`.
-   Nazwa wiąże gracza z jego postacią w zapisie kampanii, więc trzeba używać tej samej.
-2. W menu głównym: **CO-OP CAMPAIGN** łączy z serwerem i otwiera lobby (panel po prawej:
+1. Najprościej: host uruchamia grę z `--online` i w menu głównym wybiera **HOST
+   CAMPAIGN** (gra sama stawia serwer), potem **INVITE STEAM FRIEND** — znajomi dołączają
+   z zaproszenia, bez portów i adresów. Z serwerem dedykowanym: `--online --ip=<adres>
+   --port=<port> [--username=<nazwa>]` i **JOIN SERVER**. Nazwa (domyślnie nick Steam)
+   wiąże gracza z jego postacią w zapisie kampanii, więc trzeba używać tej samej.
+2. W menu głównym, po połączeniu, otwiera się lobby (panel po prawej:
    host, wybór, gracze). Pierwszy gracz w lobby jest hostem.
 3. Host wybiera **NEW CAMPAIGN** albo **LOAD <nazwa>** (kolejne kliknięcia przełączają
    zapisane kampanie), goście klikają **READY**, host **START**.
@@ -26,7 +29,7 @@ podbierania pojedynczych poprawek.
 6. Po powrocie do menu w trakcie kampanii: **JOIN THE CAMPAIGN** (host — wczytanie
    zapisu, gość — postać z kampanii).
 7. Znajomi ze Steam: **INVITE STEAM FRIEND** w lobby albo `/coop invite` w grze (opis
-   niżej, „Zapraszanie przez Steam”).
+   niżej, „Hostowanie i zapraszanie przez Steam”).
 
 ## Model: host jest autorytetem
 
@@ -347,34 +350,60 @@ pozy po scenie nie mają sensu, potrzebny skrót klawiszowy); czy `GetIsInBraind
 prawdą przez cały BD; skok w pojeździe nie przegrupowuje (loty AV), więc teleport questa z
 hostem w aucie nie zabierze gości.
 
-## Zapraszanie przez Steam
+## Hostowanie i zapraszanie przez Steam
 
-Kod: `code/client/App/World/SteamInvites.{h,cpp}` (zmiana rdzenia klienta — Steam API to
-nie skrypt), menu w `CampaignLobby.reds`, komenda w `CampaignStory.reds`.
+Kod (zmiany klienta natywnego — Steam API i procesy to nie skrypt):
+`code/client/App/World/CoopConnect.{h,cpp}` (kto dokąd się łączy, zaproszenia, Rich
+Presence), `SteamTunnel.{h,cpp}` (tunel), `ServerHost.{h,cpp}` (serwer uruchamiany przez
+grę), `SteamApi.{h,cpp}` (płaskie API z `steam_api64.dll` gry). Menu w `CampaignLobby.reds`,
+komenda `/coop invite` w `CampaignStory.reds`.
 
-- Klient używa `steam_api64.dll` gry przez płaskie API (`SteamAPI_SteamFriends_v017`);
-  wersja GOG/Epic po prostu nie ma tej opcji (komunikat w lobby).
-- **INVITE STEAM FRIEND** (lobby) / `/coop invite` (gra) otwiera okno zaproszeń nakładki
-  Steam (`ActivateGameOverlayInviteDialogConnectString`). Zaproszenie niesie argumenty
-  startowe: `--online --ip=<adres> --port=<port> --coopjoin`.
-- Znajomy przyjmuje zaproszenie:
-  - gra wyłączona → Steam uruchamia ją z tymi argumentami, mod włącza się sam i w menu
-    głównym łączy z lobby (`--coopjoin`); nazwa gracza = nick ze Steam, jeśli nie podano
-    `--username`;
-  - gra włączona z modem → callback Steam `GameRichPresenceJoinRequested` (337); klient
-    łączy się, gdy jest w menu (z innego serwera najpierw się rozłącza).
-- Będąc połączonym, gracz ma w Steam Rich Presence `connect` z tymi samymi argumentami —
-  znajomi widzą „Dołącz do gry” na liście znajomych.
-- Adres w zaproszeniu: `--publicip=<adres>` jeśli podany; inaczej adres serwera, do
-  którego jest się połączonym; gdy serwer jest na tym komputerze (127.0.0.1) — najlepszy
-  adres tego komputera: publiczny > VPN (Hamachi 25.x, Radmin 26.x, Tailscale 100.64/10)
-  > LAN. Lobby pokazuje, jaki adres poszedł.
-- **Port serwera (domyślnie 11778, UDP) musi być osiągalny dla znajomego**: przekierowany
-  na routerze, albo wspólna sieć LAN/VPN. Za CGNAT bez VPN zaproszenie nie pomoże.
+**HOST CAMPAIGN** (menu główne): gra hosta uruchamia serwer w tle
+(`<gra>\CyberpunkCoopServer\Server.Loader.exe`, bez okna, log
+`CyberpunkCoopServer\logs\coop-server.log`, w obiekcie Job — ginie razem z grą; losowe hasło
+panelu admina), łączy się z nim lokalnie (ponawia co 3 s, aż serwer wstanie) i przyjmuje
+znajomych przez **tunel Steam**. Wymaga .NET 8 Runtime u hosta (bez niego panel pokaże, że
+serwer się zatrzymał). LEAVE zamyka serwer.
 
-Do sprawdzenia w fazie testowej: czy Steam doklejając argumenty do opcji uruchamiania
-nie psuje ich (cudzysłowy), czy callback dochodzi (gra sama pompuje `SteamAPI_RunCallbacks`),
-układ `CCallbackBase` (vtable bez wirtualnego destruktora, jak w Steamworks).
+**Tunel Steam** (bez przekierowania portów, bez VPN, bez adresów): warstwa sieci CyberpunkMP
+(GameNetworkingSockets po UDP) zostaje bez zmian, tunel przenosi jej datagramy przez
+`ISteamNetworkingMessages` (P2P Steam, przez przekaźniki Valve, gdy routery nie przepuszczą
+bezpośrednio):
+- gość: lokalny port UDP na 127.0.0.1 — klient łączy się z nim jak z lokalnym serwerem,
+  każdy datagram idzie do konta Steam hosta (kanał 0x4350), odpowiedzi wracają (0x4351);
+- host: datagramy każdego gościa idą do serwera z osobnego gniazda, więc serwer widzi każdego
+  jako osobnego klienta; sesje przyjmowane w callbacku `SteamNetworkingMessagesSessionRequest`
+  (1251) — każdy, kto zna konto hosta (zaproszenie, lista znajomych); gość cichy przez 120 s
+  jest zapominany.
+- Wątek tunelu (odłączony, ~1000 obiegów/s) chodzi tylko, gdy tunel jest czynny.
+
+**Zaproszenia**: **INVITE STEAM FRIEND** (lobby) / `/coop invite` (gra) otwiera okno
+zaproszeń nakładki Steam. Zaproszenie niesie argumenty startowe:
+- serwer hostowany przez Steam (host albo gość tunelu): `--online --steamhost=<id Steam hosta> --coopjoin`,
+- serwer po adresie (dedykowany): `--online --ip=<adres> --port=<port> --coopjoin` (adres:
+  `--publicip`, adres serwera, albo najlepszy adres komputera: publiczny > VPN > LAN; wtedy
+  port musi być osiągalny).
+Znajomy przyjmuje: gra wyłączona → Steam uruchamia ją z tymi argumentami, mod włącza się sam
+i w menu łączy z lobby (`--coopjoin`); gra włączona z modem → callback
+`GameRichPresenceJoinRequested` (337), łączy się po powrocie do menu (hostowanie przerywa).
+Połączony gracz ma te same argumenty w Rich Presence `connect` — „Dołącz do gry” na liście
+znajomych. Nazwa gracza bez `--username` = nick Steam. **JOIN SERVER** łączy z serwerem z
+argumentów startowych (`--ip`/`--port` albo `--steamhost`).
+
+Uwaga: tunel używa sieci Steam przypisanej do Cyberpunka (ID aplikacji gry) — działa dla
+każdej gry na Steamie, ale to infrastruktura gry, nie moda. Tylko wersja Steam po obu
+stronach; GOG/Epic grają przez JOIN SERVER po adresie.
+
+Do sprawdzenia w fazie testowej: callbacki Steam (układ `CCallbackBase` jak w Steamworks,
+gra sama pompuje `SteamAPI_RunCallbacks`), opóźnienie przez przekaźniki, czy Steam doklejając
+argumenty do opcji uruchamiania ich nie psuje, start serwera z gry (Job, .NET 8).
+
+## Instalacja (dla graczy)
+
+`tools\campaign\Install.ps1` (gra i hostowany serwer zamknięte): klient i skrypty do
+`red4ext\plugins\zzzCyberpunkMP`, serwer do `<gra>\CyberpunkCoopServer` (jego `config`,
+`campaigns`, `logs` zostają). Plus zależności: RED4ext, redscript, Codeware, ArchiveXL,
+TweakXL, Input Loader, .NET 8 Runtime (u hosta).
 
 ## Budowanie
 

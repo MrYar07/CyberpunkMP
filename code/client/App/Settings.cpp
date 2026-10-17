@@ -51,6 +51,12 @@ void Settings::Load()
     if (launchParameters.Contains("-coopjoin"))
         settings.autoJoin = true;
 
+    if (const auto steamHost = launchParameters.Get("-steamhost"); steamHost)
+    {
+        if (steamHost->size > 0)
+            settings.steamHost = std::strtoull((*steamHost)[0].c_str(), nullptr, 10);
+    }
+
     if (const auto mods = launchParameters.Get("-mod"); mods)
     {
         for (const auto& mod : *mods)

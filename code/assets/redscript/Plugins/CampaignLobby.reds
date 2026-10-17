@@ -28,6 +28,18 @@ public class CampaignReportCallback extends DelayCallback {
     }
 }
 
+// Redraws the menu while the hosted server starts up (no server message arrives until then).
+public class CampaignHostRefresh extends DelayCallback {
+    public let remaining: Int32;
+
+    public func Call() -> Void {
+        let lobby = CampaignLobby.Get();
+        if IsDefined(lobby) {
+            lobby.OnHostRefresh(this.remaining);
+        }
+    }
+}
+
 public class CampaignRestoreCallback extends DelayCallback {
     public let game: GameInstance;
 
@@ -348,6 +360,40 @@ public class CampaignLobby extends ScriptableService {
         this.RefreshMenu();
     }
 
+    // This computer runs the server; friends join through Steam invites.
+    public func Host() -> Void {
+        let network = GameInstance.GetNetworkWorldSystem();
+        if !IsDefined(network) || network.IsConnected() {
+            return;
+        }
+        if network.HostCampaign() {
+            this.m_connecting = true;
+        }
+        this.RefreshMenu();
+        this.ScheduleHostRefresh(60);
+    }
+
+    private func ScheduleHostRefresh(remaining: Int32) -> Void {
+        let refresh = new CampaignHostRefresh();
+        refresh.remaining = remaining;
+        GameInstance.GetDelaySystem(GetGameInstance()).DelayCallback(refresh, 1.0, false);
+    }
+
+    public func OnHostRefresh(remaining: Int32) -> Void {
+        if CampaignLobby.IsConnected() {
+            return;
+        }
+        // The server gave up or failed: show why, and offer the buttons again.
+        let status = GameInstance.GetNetworkWorldSystem().GetHostStatus();
+        if StrLen(status) == 0 || !StrBeginsWith(status, "Starting") {
+            this.m_connecting = false;
+        }
+        this.RefreshMenu();
+        if remaining > 0 && this.m_connecting {
+            this.ScheduleHostRefresh(remaining - 1);
+        }
+    }
+
     public func Leave() -> Void {
         let network = GameInstance.GetNetworkWorldSystem();
         if IsDefined(network) {
@@ -369,6 +415,9 @@ public class CampaignLobby extends ScriptableService {
     public static func InviteNote(address: String) -> String {
         if StrLen(address) == 0 {
             return "Steam invites need the Steam version of the game with the overlay on";
+        }
+        if Equals(address, "Steam") {
+            return "Invite sent: friends join through Steam - no ports or addresses needed";
         }
         return s"Invite: friends connect to \(address) - the server's port must be reachable for them (forwarded, or the same LAN/VPN)";
     }
@@ -469,14 +518,21 @@ public class CampaignLobby extends ScriptableService {
     }
 
     public func PanelText() -> String {
-        if this.m_connecting {
-            return "CO-OP CAMPAIGN\nConnecting...";
-        }
+        let hostStatus = GameInstance.GetNetworkWorldSystem().GetHostStatus();
         if !CampaignLobby.IsConnected() {
+            if StrLen(hostStatus) > 0 {
+                return s"CO-OP CAMPAIGN\n\(hostStatus)";
+            }
+            if this.m_connecting {
+                return "CO-OP CAMPAIGN\nConnecting...";
+            }
             return "";
         }
 
         let text = "CO-OP CAMPAIGN";
+        if StrLen(hostStatus) > 0 {
+            text += s"\n\(hostStatus)";
+        }
         if StrLen(this.m_host) > 0 {
             text += s"\nHost: \(this.m_host)";
         } else {
@@ -857,7 +913,10 @@ private func PopulateMenuItemList() -> Void {
     if !network.IsConnected() {
         wrappedMethod();
         if !lobby.IsConnecting() {
-            this.AddMenuItem("CO-OP CAMPAIGN", n"OnCampaignConnect");
+            // Host: this computer runs the server, friends come through Steam invites.
+            // Join server: the server named in the launch arguments (a dedicated one).
+            this.AddMenuItem("CO-OP: HOST CAMPAIGN", n"OnCampaignHost");
+            this.AddMenuItem("CO-OP: JOIN SERVER", n"OnCampaignConnect");
         }
         this.m_menuListController.Refresh();
         return;
@@ -901,6 +960,7 @@ protected func HandleMenuItemActivate(data: ref<PauseMenuListItemData>) -> Bool 
 
     switch data.eventName {
         case n"OnCampaignConnect": lobby.Connect(); return true;
+        case n"OnCampaignHost": lobby.Host(); return true;
         case n"OnCampaignLeave": lobby.Leave(); return true;
         case n"OnCampaignInvite": lobby.InviteFriend(); return true;
         case n"OnCampaignReady": lobby.ToggleReady(); return true;

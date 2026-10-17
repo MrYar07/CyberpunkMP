@@ -30,6 +30,11 @@ public native class NetworkWorldSystem extends IGameSystem {
     // Opens the Steam overlay's invite dialog for this server; returns the address friends
     // get, empty without Steam.
     public native func OpenSteamInvite() -> String;
+    // Starts the bundled server on this computer, connects to it and lets Steam friends in
+    // through the Steam tunnel. Disconnect() ends it.
+    public native func HostCampaign() -> Bool;
+    // "" when not hosting; otherwise how starting the server goes, or what went wrong.
+    public native func GetHostStatus() -> String;
     // Other players' characters near the scene spot (anchor, facing forward) stand beside it.
     public native func SetSceneSpacing(enabled: Bool, anchor: Vector4, forward: Vector4) -> Void;
     // A puppet placed by the local scene (seat, chair, spot) stops following its player.

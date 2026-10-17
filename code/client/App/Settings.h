@@ -27,6 +27,9 @@ struct Settings
     // set by an invite's launch arguments).
     String publicIp{};
     bool autoJoin = false;
+    // The host's Steam account when the server is reached through the Steam tunnel
+    // (--steamhost, from an invite); 0 for a server reached by address.
+    uint64_t steamHost = 0;
     Vector<fs::path> mods = {};
     bool enabled = false;
     bool RpcOnly = false;

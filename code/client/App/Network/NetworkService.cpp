@@ -7,7 +7,7 @@
 #include "App/World/AppearanceSystem.h"
 #include "Game/CharacterCustomizationSystem.h"
 #include "App/Settings.h"
-#include "App/World/SteamInvites.h"
+#include "App/World/CoopConnect.h"
 
 NetworkService::NetworkService()
     : Client(client::kIdentifier, server::kIdentifier)
@@ -46,7 +46,7 @@ void NetworkService::OnConnected()
     auto username = Settings::Get().username;
     if (!Settings::Get().usernameGiven)
     {
-        if (const auto steamName = SteamInvites::PersonaName(); !steamName.empty())
+        if (const auto steamName = CoopConnect::PersonaName(); !steamName.empty())
             username = steamName.c_str();
     }
     request.set_username(username);

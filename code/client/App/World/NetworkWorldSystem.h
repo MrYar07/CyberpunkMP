@@ -63,6 +63,8 @@ struct NetworkWorldSystem : RED4ext::IGameSystem, Core::HookingAgent, flecs::wor
     Red::CString TakeQuestNodes();
     Red::CString GetSceneKey();
     Red::CString OpenSteamInvite();
+    bool HostCampaign();
+    Red::CString GetHostStatus();
     void ReplayQuestNodes(const Red::CString& aEntries);
     void SetSceneSpacing(bool aEnabled, const Red::Vector4& aAnchor, const Red::Vector4& aForward);
     void SetPuppetHeld(Red::EntityID aEntity, bool aHeld);
@@ -115,6 +117,8 @@ RTTI_DEFINE_CLASS(NetworkWorldSystem, {
     RTTI_METHOD(SetQuestMirror);
     RTTI_METHOD(GetSceneKey);
     RTTI_METHOD(OpenSteamInvite);
+    RTTI_METHOD(HostCampaign);
+    RTTI_METHOD(GetHostStatus);
     RTTI_METHOD(TakeQuestNodes);
     RTTI_METHOD(ReplayQuestNodes);
     RTTI_METHOD(SetSceneSpacing);
