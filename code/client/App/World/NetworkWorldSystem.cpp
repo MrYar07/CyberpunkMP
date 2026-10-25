@@ -14,7 +14,9 @@
 #include "App/Components/EntityComponent.h"
 #include "App/Components/SpawningComponent.h"
 #include "App/Components/InterpolationComponent.h"
+#include "App/World/FlecsThread.h"
 #include "App/World/PuppetRegistry.h"
+#include "App/World/ServerIdRegistry.h"
 #include "Game/Utils.h"
 #include "Game/CharacterCustomizationSystem.h"
 
@@ -95,6 +97,7 @@ bool NetworkWorldSystem::Spawn(uint64_t aServerId, const Red::Vector4& aPosition
     // identifies our puppets through this registry instead of reading the entity's
     // tag array off-thread, which was racing against the main thread's setup.
     App::PuppetRegistry::Add(id.hash);
+    App::ServerIdRegistry::Add(id.hash, aServerId);
 
     make_alive(aServerId).emplace<SpawningComponent>(id);
 
@@ -123,6 +126,7 @@ void NetworkWorldSystem::DeSpawn(uint64_t aServerId) const
         Red::Detail::CallFunctionWithArgs(m_pDeletePuppet, handle, pEntity->Id);
     }
 
+    App::ServerIdRegistry::RemoveServer(aServerId);
     entity.destruct();
 }
 
@@ -146,6 +150,14 @@ flecs::entity NetworkWorldSystem::GetEntityByServerId(uint64_t aServerId) const
 
 Red::EntityID NetworkWorldSystem::GetEntityIdByServerId(uint64_t aServerId) const
 {
+    // Script-callable, so it can arrive on any of the engine's job threads; the registry is
+    // the only answer that is safe there (FlecsThread.h).
+    if (const auto hash = App::ServerIdRegistry::FindEntity(aServerId))
+        return hash;
+
+    if (!App::FlecsThread::IsCurrent())
+        return 0;
+
     const auto entity = GetEntityByServerId(aServerId);
     if (!entity)
         return 0;
@@ -161,6 +173,8 @@ Red::EntityID NetworkWorldSystem::GetEntityIdByServerId(uint64_t aServerId) cons
 
 flecs::entity NetworkWorldSystem::FindEntity(Red::EntityID aId) const
 {
+    App::FlecsThread::Assert("NetworkWorldSystem::FindEntity");
+
     auto entity = query<EntityComponent>().find(
         [aId](const EntityComponent& component)
         {
@@ -192,7 +206,10 @@ void NetworkWorldSystem::Update(uint64_t aTick)
 
     const auto service = Core::Container::Get<NetworkService>();
     if (service && service->IsConnected())
+    {
+        App::FlecsThread::MarkCurrent();
         progress(static_cast<float>(delta) / 1000.f);
+    }
 }
 
 void NetworkWorldSystem::OnWorldAttached(RED4ext::world::RuntimeScene* aScene)
@@ -233,6 +250,7 @@ void NetworkWorldSystem::OnAfterWorldDetach()
     each([](flecs::entity entity, EntityComponent&) { entity.destruct(); });
     each([](flecs::entity entity, SpawningComponent&) { entity.destruct(); });
     App::PuppetRegistry::Clear();
+    App::ServerIdRegistry::Clear();
     m_appearanceSystem->ForgetEntityNames();
 
     if (const auto pNetworkService = Core::Container::Get<NetworkService>())
@@ -758,6 +776,7 @@ void NetworkWorldSystem::OnDisconnected(Client::EDisconnectReason aReason)
         });
 
     App::PuppetRegistry::Clear();
+    App::ServerIdRegistry::Clear();
 
     if (m_updatePlayerLocation)
         m_updatePlayerLocation.destruct();

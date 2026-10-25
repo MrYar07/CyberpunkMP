@@ -13,6 +13,9 @@
 #include "App/Components/AttachedComponent.h"
 #include "App/Components/SpawningComponent.h"
 #include "App/Components/InterpolationComponent.h"
+#include "App/Threading/ThreadService.h"
+#include "App/World/FlecsThread.h"
+#include "App/World/ServerIdRegistry.h"
 
 
 // Puts a network vehicle fully under remote control: no local player input, no local
@@ -111,8 +114,10 @@ void VehicleSystem::OnVehicleEnter(Red::EntityID aVehicle, const Red::TweakDBID&
     request.set_vehicle_id(aVehicleTdbid.value);
     request.set_sit_id(aName.hash);
 
-    const auto serverVehicle = handle->FindEntity(aVehicle);
-    if (serverVehicle)
+    // Called from script on one of the engine's job threads, so no flecs here: the result is
+    // only ever used as an id (Night City Online 0fa2bb9 caught this one off-thread).
+    const auto serverVehicle = App::ServerIdRegistry::Find(aVehicle.hash);
+    if (serverVehicle != 0)
     {
         request.set_remote_vehicle_id(serverVehicle);
 
@@ -183,6 +188,7 @@ bool VehicleSystem::HandleVehicleLoadMessage(const PacketEvent<server::NotifyVeh
     // spdlog::info("[VehicleSystem] * Spawned: {}, {}", aMessage.get_id(), id.hash);
     const auto worldSystem = Red::GetGameSystem<NetworkWorldSystem>();
     worldSystem->make_alive(aMessage.get_id()).emplace<SpawningComponent>(id);
+    App::ServerIdRegistry::Add(id.hash, aMessage.get_id());
 
     return true;
 }
@@ -234,6 +240,33 @@ void VehicleSystem::OnVehicleReady(const Red::EntityID& aVehicleEntityId)
 {
     spdlog::info("[VehicleSystem] OnVehicleReady");
 
+    // Called from script, so possibly on one of the engine's job threads. What follows makes
+    // structural changes to the flecs world and reads m_pendingMounts, which the network
+    // handlers fill on the main thread - so it runs there.
+    if (App::FlecsThread::IsCurrent())
+    {
+        ApplyVehicleReady(aVehicleEntityId);
+        return;
+    }
+
+    const auto id = aVehicleEntityId;
+    ThreadService::RunInMainThread([id]
+    {
+        const auto worldSystem = Red::GetGameSystem<NetworkWorldSystem>();
+        if (!worldSystem)
+            return;
+        if (const auto vehicleSystem = worldSystem->GetVehicleSystem())
+        {
+            // Run once, wherever the main thread is: if it is not the flecs thread after all,
+            // the tripwire names it instead of the call bouncing back here forever.
+            App::FlecsThread::Assert("VehicleSystem::OnVehicleReady (main thread)");
+            vehicleSystem->ApplyVehicleReady(id);
+        }
+    });
+}
+
+void VehicleSystem::ApplyVehicleReady(const Red::EntityID& aVehicleEntityId)
+{
     const auto worldSystem = Red::GetGameSystem<NetworkWorldSystem>();
 
     // Physics off FIRST, mounts second. Everything reaching this callback is a network
@@ -252,6 +285,7 @@ void VehicleSystem::OnVehicleReady(const Red::EntityID& aVehicleEntityId)
             auto vehicleEntity = worldSystem->GetEntityByServerId(message.get_vehicle_id());
             vehicleEntity.emplace<EntityComponent>(aVehicleEntityId, true, nullptr);
             vehicleEntity.remove<SpawningComponent>();
+            App::ServerIdRegistry::Add(aVehicleEntityId.hash, message.get_vehicle_id());
 
             const auto vehicle = worldSystem->GetEntityIdByServerId(message.get_vehicle_id());
 

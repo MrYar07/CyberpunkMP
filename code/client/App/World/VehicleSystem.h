@@ -37,6 +37,8 @@ protected:
     void DoMount(flecs::entity aCharacter, Red::EntityID aVehicle, Red::CName aSit);
 
 private:
+    void ApplyVehicleReady(const Red::EntityID& aVehicleEntityId);
+
     bool m_ready{false};
     Core::Map<Red::EntityID, Vector<PacketEvent<server::NotifyVehicleEnter>>> m_pendingMounts;
     Red::CBaseFunction* m_pSpawnVehicle;
