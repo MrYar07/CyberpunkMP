@@ -753,6 +753,7 @@ void NetworkWorldSystem::OnConnected()
                     return;
 
                  aEntity.emplace<EntityComponent>(aSpawning.Id, false, aSpawning.Controller);
+                 aEntity.add<InterpolationComponent>();
                  aEntity.remove<SpawningComponent>();
                  pOwner->tags.Add("CyberpunkMP.Puppet");
             }

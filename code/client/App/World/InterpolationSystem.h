@@ -31,7 +31,6 @@ protected:
 private:
     bool m_ready{false};
     flecs::system m_interpolator;
-    flecs::observer m_entityObserver;
 };
 
 RTTI_DEFINE_CLASS(InterpolationSystem, { 

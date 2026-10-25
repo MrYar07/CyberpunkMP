@@ -284,6 +284,7 @@ void VehicleSystem::ApplyVehicleReady(const Red::EntityID& aVehicleEntityId)
 
             auto vehicleEntity = worldSystem->GetEntityByServerId(message.get_vehicle_id());
             vehicleEntity.emplace<EntityComponent>(aVehicleEntityId, true, nullptr);
+            vehicleEntity.add<InterpolationComponent>();
             vehicleEntity.remove<SpawningComponent>();
             App::ServerIdRegistry::Add(aVehicleEntityId.hash, message.get_vehicle_id());
 

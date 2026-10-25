@@ -183,19 +183,11 @@ void InterpolationSystem::OnWorldAttached(RED4ext::world::RuntimeScene* aScene)
 {
     spdlog::info("[InterpolationSystem] OnWorldAttached");
 
-    static std::once_flag s_flag;
-    std::call_once(s_flag, [this]()
-    {
-        const auto pSystem = Red::GetGameSystem<NetworkWorldSystem>();
-
-        m_entityObserver = pSystem->observer<EntityComponent>()
-           .event(flecs::OnAdd)
-           .write<InterpolationComponent>()
-           .each([](flecs::entity aEntity, EntityComponent&)
-           {
-               aEntity.add<InterpolationComponent>();
-           });
-    });
+    // No OnAdd<EntityComponent> observer here any more: its callback added
+    // InterpolationComponent DURING observer dispatch, a structural change mid-notify, and one
+    // trigger (VehicleSystem's emplace) runs undeferred, so flecs dispatched it inline. Both
+    // sites that create EntityComponent now add InterpolationComponent themselves.
+    // Night City Online 98b12fa, from its flecs_stack_restore_cursor crash hunt.
 
     m_ready = true;
 }
