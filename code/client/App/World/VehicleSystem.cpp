@@ -55,12 +55,14 @@ void VehicleSystem::OnWorldAttached(RED4ext::world::RuntimeScene* aScene)
 void VehicleSystem::OnAfterWorldDetach()
 {
     m_ready = false;
+    m_mounted = false;
 }
 
 void VehicleSystem::OnDisconnected()
 {
     m_vehicleRemoteId = std::nullopt;
     m_vehicleGameId = std::nullopt;
+    m_mounted = false;
 }
 
 void VehicleSystem::OnInitialize(const RED4ext::JobHandle& aJob)
@@ -137,6 +139,7 @@ void VehicleSystem::OnVehicleEnter(Red::EntityID aVehicle, const Red::TweakDBID&
         m_vehicleGameId = aVehicle;
     }
 
+    m_mounted = true;
     pNetworkService->Send(request);
 }
 
@@ -149,6 +152,16 @@ void VehicleSystem::OnVehicleExit()
     if (m_enterSkipped)
     {
         m_enterSkipped = false;
+        return;
+    }
+
+    // The engine fires this more than once when something yanks the player out of a seat (a
+    // quest or server teleport). The repeat would send a second, fieldless exit that the
+    // server applies unconditionally - Night City Online e53b7b8 saw it leave a player
+    // unmounted but stuck on the bike. Only the first exit after an enter is real.
+    if (!m_mounted.exchange(false))
+    {
+        spdlog::info("[VehicleSystem] OnVehicleExit: not mounted - ignoring a repeat exit");
         return;
     }
     const auto pNetworkService = Core::Container::Get<NetworkService>();

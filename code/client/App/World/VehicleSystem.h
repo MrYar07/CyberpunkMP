@@ -47,6 +47,8 @@ private:
     std::optional<uint64_t> m_vehicleRemoteId;
     std::optional<Red::EntityID> m_vehicleGameId;
     bool m_enterSkipped{false};
+    // Set when an enter is sent, consumed by the first exit; script calls arrive on job threads.
+    std::atomic_bool m_mounted{false};
 };
 
 RTTI_DEFINE_CLASS(VehicleSystem, { 
