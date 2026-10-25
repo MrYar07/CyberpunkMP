@@ -39,9 +39,26 @@ void AppearanceSystem::OnBeforeWorldDetach(RED4ext::world::RuntimeScene* aScene)
     Red::CallVirtual(this, "OnBeforeWorldDetach");
 }
 
+// FNV-1a: a cheap fingerprint of appearance bytes (which face state is already scheduled).
+static uint64_t HashBytes(const void* apData, size_t aSize)
+{
+    const auto* p = static_cast<const uint8_t*>(apData);
+    uint64_t hash = 0xcbf29ce484222325ULL;
+    for (size_t i = 0; i < aSize; ++i)
+    {
+        hash ^= p[i];
+        hash *= 0x100000001b3ULL;
+    }
+    return hash;
+}
+
 Red::DynArray<Red::TweakDBID> AppearanceSystem::GetEntityItems(Red::EntityID & entityID)
 {
-    return m_playerEquipment[entityID];
+    std::lock_guard lock(m_mapLock);
+
+    // find, not operator[] - a read must not insert an empty entry for an unknown entity.
+    const auto it = m_playerEquipment.find(entityID);
+    return it == m_playerEquipment.end() ? Red::DynArray<Red::TweakDBID>() : it->second;
 }
 
 Vector<String> AppearanceSystem::GetPlayerItems(Red::Handle<Red::GameObject> player)
@@ -59,22 +76,26 @@ Vector<String> AppearanceSystem::GetPlayerItems(Red::Handle<Red::GameObject> pla
 
 void AppearanceSystem::SetEntityName(Red::EntityID entityID, const std::string& acName)
 {
+    std::lock_guard lock(m_mapLock);
     m_playerNames[entityID] = acName;
 }
 
 std::string AppearanceSystem::GetEntityName(Red::EntityID entityID) const
 {
+    std::lock_guard lock(m_mapLock);
     const auto it = m_playerNames.find(entityID);
     return it == m_playerNames.end() ? std::string() : it->second;
 }
 
 void AppearanceSystem::ForgetEntityName(Red::EntityID entityID)
 {
+    std::lock_guard lock(m_mapLock);
     m_playerNames.erase(entityID);
 }
 
 void AppearanceSystem::ForgetEntityNames()
 {
+    std::lock_guard lock(m_mapLock);
     m_playerNames.clear();
 }
 
@@ -87,6 +108,7 @@ Red::CString AppearanceSystem::GetNetworkPlayerName(Red::EntityID aEntityId) con
 void AppearanceSystem::AddEntity(const Red::EntityID entityID, const Red::DynArray<Red::TweakDBID>& items, const Vector<uint8_t> ccstate)
 {
     spdlog::info("Logging Entity Appearance: {}", entityID.hash);
+    std::lock_guard lock(m_mapLock);
     m_playerEquipment[entityID] = items;
     m_playerCcstate[entityID] = ccstate;
 }
@@ -207,13 +229,25 @@ bool AppearanceSystem::ApplyAppearance(Red::Handle<Red::game::Object> object)
         return false;
     }
 
-    if (m_playerCcstate.find(object.instance->id) == m_playerCcstate.end())
+    // One locked copy-out of what this function needs from the maps; the rest works on the
+    // copies, so nothing engine-facing runs under the lock.
+    Vector<uint8_t> bytes;
+    Red::DynArray<Red::TweakDBID> equipment;
     {
-        // not our entity
-        return false;
+        std::lock_guard lock(m_mapLock);
+
+        const auto ccIt = m_playerCcstate.find(object.instance->id);
+        if (ccIt == m_playerCcstate.end())
+        {
+            // not our entity
+            return false;
+        }
+        bytes = ccIt->second;
+
+        if (const auto eqIt = m_playerEquipment.find(object.instance->id); eqIt != m_playerEquipment.end())
+            equipment = eqIt->second;
     }
 
-    auto bytes = m_playerCcstate[object.instance->id];
     if (bytes.size() == 0)
     {
         spdlog::info("no bytes for {}", object->id.hash);
@@ -276,8 +310,8 @@ bool AppearanceSystem::ApplyAppearance(Red::Handle<Red::game::Object> object)
     // old method
     // Red::CallVirtual(this, "AddItems", object);
 
-    // c++ method
-    auto items = m_playerEquipment[object.instance->id];
+    // c++ method - copied out under the lock at the top of this function
+    auto items = equipment;
     // if (stateHandle.instance->isBodyGenderMale) {
     //     // items.PushBack("Items.PlayerMaTppHead");
     //     items.PushBack("Items.MuppetMaHead");
