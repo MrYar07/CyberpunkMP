@@ -17,6 +17,14 @@
 #include "App/World/FlecsThread.h"
 #include "App/World/ServerIdRegistry.h"
 
+namespace
+{
+// Set when an enter is sent, consumed by the first exit. Script calls arrive on job threads,
+// and an atomic member would make the RTTI class non-copyable, hence a file static
+// (VehicleSystem is a single game system).
+std::atomic_bool s_mounted{false};
+}
+
 
 // Puts a network vehicle fully under remote control: no local player input, no local
 // physics. Interpolation drives these with ForceMoveTo, so a live rigid body here is not
@@ -55,14 +63,14 @@ void VehicleSystem::OnWorldAttached(RED4ext::world::RuntimeScene* aScene)
 void VehicleSystem::OnAfterWorldDetach()
 {
     m_ready = false;
-    m_mounted = false;
+    s_mounted = false;
 }
 
 void VehicleSystem::OnDisconnected()
 {
     m_vehicleRemoteId = std::nullopt;
     m_vehicleGameId = std::nullopt;
-    m_mounted = false;
+    s_mounted = false;
 }
 
 void VehicleSystem::OnInitialize(const RED4ext::JobHandle& aJob)
@@ -139,7 +147,7 @@ void VehicleSystem::OnVehicleEnter(Red::EntityID aVehicle, const Red::TweakDBID&
         m_vehicleGameId = aVehicle;
     }
 
-    m_mounted = true;
+    s_mounted = true;
     pNetworkService->Send(request);
 }
 
@@ -159,7 +167,7 @@ void VehicleSystem::OnVehicleExit()
     // quest or server teleport). The repeat would send a second, fieldless exit that the
     // server applies unconditionally - Night City Online e53b7b8 saw it leave a player
     // unmounted but stuck on the bike. Only the first exit after an enter is real.
-    if (!m_mounted.exchange(false))
+    if (!s_mounted.exchange(false))
     {
         spdlog::info("[VehicleSystem] OnVehicleExit: not mounted - ignoring a repeat exit");
         return;

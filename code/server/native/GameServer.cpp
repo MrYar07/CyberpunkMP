@@ -16,8 +16,10 @@ GameServer* GServer = nullptr;
 
 namespace
 {
+// The server also builds for Linux (Docker), so no _dupenv_s.
 std::string EnvString(const char* acpName)
 {
+#ifdef _WIN32
     char* pValue = nullptr;
     size_t size = 0;
     if (_dupenv_s(&pValue, &size, acpName) != 0 || !pValue)
@@ -25,6 +27,10 @@ std::string EnvString(const char* acpName)
     std::string value(pValue);
     free(pValue);
     return value;
+#else
+    const char* pValue = std::getenv(acpName);
+    return pValue ? std::string(pValue) : std::string{};
+#endif
 }
 
 bool EnvFlag(const char* acpName)
