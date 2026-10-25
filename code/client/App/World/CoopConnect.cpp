@@ -377,7 +377,10 @@ bool CoopConnect::Host()
     if (s_hosting)
         return true;
 
-    if (!ServerHost::Start())
+    // With Steam, friends join through the tunnel and the server stays local; without it
+    // (GOG, Epic) they need the address, so the server listens on the network.
+    const bool steam = SteamApi::Available();
+    if (!ServerHost::Start(steam))
     {
         s_hostStatus = ServerHost::Problem().c_str();
         return false;
@@ -400,7 +403,10 @@ bool CoopConnect::Host()
     s_hostNextAttempt = std::chrono::steady_clock::now() + kHostRetry;
 
     const bool tunnel = SteamTunnel::StartHost(kHostPort);
-    s_hostStatus = tunnel ? "Starting the co-op server..." : "Starting the co-op server (no Steam: friends need your address)...";
+    if (steam && !tunnel)
+        s_hostStatus = "The Steam tunnel did not start, so friends cannot join - LEAVE and host again";
+    else
+        s_hostStatus = tunnel ? "Starting the co-op server..." : "Starting the co-op server (no Steam: friends need your address)...";
     return true;
 }
 

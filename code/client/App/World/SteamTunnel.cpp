@@ -6,6 +6,9 @@
 #include <WS2tcpip.h>
 #include <mstcpip.h>
 
+#include <mutex>
+#include <unordered_set>
+
 #ifndef SIO_UDP_CONNRESET
 #define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR, 12)
 #endif
@@ -45,21 +48,44 @@ bool s_hasGameAddress{false};
 bool s_hosting{false};
 uint16_t s_serverPort{0};
 std::unordered_map<uint64_t, Guest> s_guests;
+// Friends whose session request was accepted. Written by the Steam callback (game thread),
+// read by the tunnel worker, which must not call ISteamFriends itself (not thread safe).
+std::mutex s_acceptedLock;
+std::unordered_set<uint64_t> s_accepted;
+
+bool IsAccepted(uint64_t aSteamId)
+{
+    std::lock_guard _(s_acceptedLock);
+    return s_accepted.contains(aSteamId);
+}
 
 class SessionRequestCallback : public SteamApi::CallbackBase
 {
 public:
     SessionRequestCallback() { m_callback = kSessionRequestId; }
 
-    // Whoever knows this host's Steam account (an invite, the friends list) may connect; the
-    // lobby decides the rest.
+    // Only the host's Steam friends get a session. A Steam ID is public, so "knows the host's
+    // account" admits anyone; an unaccepted request simply expires and its messages are never
+    // delivered.
     void Run(void* apParam) override
     {
         const auto* pIdentity = static_cast<SteamApi::Identity*>(apParam);
         if (!pIdentity || !s_hosting)
             return;
+
+        if (pIdentity->type != kIdentitySteamId || !SteamApi::IsFriend(pIdentity->steamId64))
+        {
+            spdlog::warn("[SteamTunnel] refused {}: not a Steam friend of the host",
+                         pIdentity->type == kIdentitySteamId ? pIdentity->steamId64 : 0);
+            return;
+        }
+
+        {
+            std::lock_guard _(s_acceptedLock);
+            s_accepted.insert(pIdentity->steamId64);
+        }
         SteamApi::AcceptSession(*pIdentity);
-        spdlog::info("[SteamTunnel] accepted {}", pIdentity->type == kIdentitySteamId ? pIdentity->steamId64 : 0);
+        spdlog::info("[SteamTunnel] accepted friend {}", pIdentity->steamId64);
     }
 
     void Run(void* apParam, bool, uint64_t) override { Run(apParam); }
@@ -165,7 +191,8 @@ void PumpHost(char* apBuffer)
     for (int i = 0; i < count; ++i)
     {
         auto* pMessage = messages[i];
-        if (pMessage->peer.type == kIdentitySteamId)
+        // Second gate: only peers the session callback accepted as friends reach the server.
+        if (pMessage->peer.type == kIdentitySteamId && IsAccepted(pMessage->peer.steamId64))
         {
             auto& guest = s_guests[pMessage->peer.steamId64];
             if (guest.socket == INVALID_SOCKET)
@@ -323,6 +350,10 @@ void SteamTunnel::StopHost()
             SteamApi::CloseSession(steamId);
         }
         s_guests.clear();
+        {
+            std::lock_guard accepted(s_acceptedLock);
+            s_accepted.clear();
+        }
         StopWorkerIfIdle();
     }
 }

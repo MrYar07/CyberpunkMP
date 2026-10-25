@@ -9,7 +9,9 @@
 struct ServerHost
 {
     // Starts the server unless it already runs. False with Problem() set when it cannot.
-    static bool Start();
+    // aLoopbackOnly: friends come in through the Steam tunnel, so the server listens on this
+    // computer only and cannot be reached around the tunnel's friends check.
+    static bool Start(bool aLoopbackOnly);
     static void Stop();
     static bool IsRunning();
     static Red::CString Problem();

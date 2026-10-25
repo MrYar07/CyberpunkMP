@@ -14,6 +14,35 @@ using nlohmann::json;
 
 GameServer* GServer = nullptr;
 
+namespace
+{
+std::string EnvString(const char* acpName)
+{
+    char* pValue = nullptr;
+    size_t size = 0;
+    if (_dupenv_s(&pValue, &size, acpName) != 0 || !pValue)
+        return {};
+    std::string value(pValue);
+    free(pValue);
+    return value;
+}
+
+bool EnvFlag(const char* acpName)
+{
+    const auto value = EnvString(acpName);
+    return value == "1" || value == "true";
+}
+
+// Same length and same bytes, without stopping at the first difference.
+bool SecretEquals(std::string_view acLhs, std::string_view acRhs)
+{
+    uint8_t diff = acLhs.size() == acRhs.size() ? 0 : 1;
+    for (size_t i = 0; i < acLhs.size(); ++i)
+        diff |= static_cast<uint8_t>(acLhs[i] ^ (i < acRhs.size() ? acRhs[i] : 0));
+    return diff == 0;
+}
+} // namespace
+
 GameServer::GameServer()
     : Server(client::kIdentifier, server::kIdentifier)
     , m_log(m_path)
@@ -49,8 +78,15 @@ GameServer::GameServer()
         return;
     }
 
+    // A server the game starts for the Steam tunnel (ServerHost.cpp) is reached only through
+    // the tunnel, locally: it listens on loopback so nobody can go around the tunnel's friends
+    // check, and it may be handed a join password the same way as the admin account.
+    const bool loopbackOnly = EnvFlag("CYBERPUNKMP_BIND_LOOPBACK");
+    if (const auto password = EnvString("CYBERPUNKMP_SERVER_PASSWORD"); !password.empty())
+        m_config.Password = password;
+
     uint16_t port = m_config.Port;
-    while (!Host(port, m_config.TickRate))
+    while (!Host(port, m_config.TickRate, true, loopbackOnly))
     {
         spdlog::warn("Port {} is already in use, trying {}", port, port + 1);
         port++;
@@ -61,7 +97,8 @@ GameServer::GameServer()
 
     RegisterHandler<&GameServer::HandleAuthentication>(this);
 
-    spdlog::info("Server started on port {}", GetPort());
+    spdlog::info("Server started on port {}{}{}", GetPort(), loopbackOnly ? " (this computer only)" : "",
+                 m_config.Password.empty() ? ", no join password" : ", join password required");
 }
 
 GameServer::~GameServer()
@@ -157,7 +194,40 @@ void GameServer::HandleAuthentication(const PacketEvent<client::AuthenticationRe
         return;
     }
 
-    spdlog::info("Authorize connection from {} with token {}", aRequest.get_username(), aRequest.get_token());
+    // The token carries the join password. It is never logged.
+    if (!m_config.Password.empty() && !SecretEquals(m_config.Password, std::string_view(aRequest.get_token().c_str(), aRequest.get_token().size())))
+    {
+        response.set_success(false);
+        response.set_error("Wrong server password");
+
+        spdlog::warn("Refused {} from connection {:x}: wrong server password", aRequest.get_username(), aRequest.ConnectionId);
+        Send(aRequest.ConnectionId, response);
+        Kick(aRequest.ConnectionId);
+        return;
+    }
+
+    // A name identifies a player's character in the campaign save, so a second connection may
+    // not take a name that is already playing.
+    const std::string username(aRequest.get_username().c_str(), aRequest.get_username().size());
+    bool nameInUse = username.empty();
+    GetWorld()->get_mut<PlayerManager>()->ForEach(
+        [&](flecs::entity aPlayer)
+        {
+            if (const auto* pPlayer = aPlayer.get<PlayerComponent>())
+                nameInUse = nameInUse || pPlayer->Username == username;
+        });
+    if (nameInUse)
+    {
+        response.set_success(false);
+        response.set_error(username.empty() ? "A player name is required" : "This player name is already on the server");
+
+        spdlog::warn("Refused connection {:x}: name \"{}\" is empty or already playing", aRequest.ConnectionId, username);
+        Send(aRequest.ConnectionId, response);
+        Kick(aRequest.ConnectionId);
+        return;
+    }
+
+    spdlog::info("Authorize connection from {}", username);
     response.set_success(true);
 
     server::Settings settings;

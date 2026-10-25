@@ -27,6 +27,7 @@ void (*s_inviteDialog)(void*, const char*){nullptr};
 bool (*s_setRichPresence)(void*, const char*, const char*){nullptr};
 void (*s_clearRichPresence)(void*){nullptr};
 const char* (*s_personaName)(void*){nullptr};
+int (*s_friendRelationship)(void*, uint64_t){nullptr};
 void (*s_setSteamId64)(SteamApi::Identity*, uint64_t){nullptr};
 int (*s_sendToUser)(void*, const SteamApi::Identity&, const void*, uint32_t, int, int){nullptr};
 int (*s_receive)(void*, int, SteamApi::Message**, int){nullptr};
@@ -71,6 +72,9 @@ bool SteamApi::Load()
     s_accept = Resolve<decltype(s_accept)>(module, "SteamAPI_ISteamNetworkingMessages_AcceptSessionWithUser", ok);
     s_close = Resolve<decltype(s_close)>(module, "SteamAPI_ISteamNetworkingMessages_CloseSessionWithUser", ok);
     s_initRelay = Resolve<decltype(s_initRelay)>(module, "SteamAPI_ISteamNetworkingUtils_InitRelayNetworkAccess", ok);
+    // Not required for the rest: without it the tunnel accepts nobody (IsFriend is false).
+    bool friendsOk = true;
+    s_friendRelationship = Resolve<decltype(s_friendRelationship)>(module, "SteamAPI_ISteamFriends_GetFriendRelationship", friendsOk);
 
     s_ok = ok;
     if (!ok)
@@ -130,6 +134,14 @@ std::string SteamApi::PersonaName()
         return {};
     const auto* pName = s_personaName(pFriends);
     return pName ? pName : "";
+}
+
+bool SteamApi::IsFriend(uint64_t aSteamId)
+{
+    // EFriendRelationship: k_EFriendRelationshipFriend = 3.
+    constexpr int kFriend = 3;
+    auto* pFriends = Friends();
+    return pFriends && s_friendRelationship && aSteamId != 0 && s_friendRelationship(pFriends, aSteamId) == kFriend;
 }
 
 SteamApi::Identity SteamApi::SteamIdentity(uint64_t aSteamId)

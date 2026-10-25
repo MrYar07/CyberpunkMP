@@ -15,7 +15,9 @@ struct Server
 
     TP_NOCOPYMOVE(Server);
 
-    bool Host(uint16_t aPort, uint32_t aTickRate, bool bEnableDualStackIP = true) noexcept;
+    // aLoopbackOnly: listen on 127.0.0.1 only - a server started by the game for the Steam
+    // tunnel, which reaches it locally and must not be reachable around it.
+    bool Host(uint16_t aPort, uint32_t aTickRate, bool bEnableDualStackIP = true, bool aLoopbackOnly = false) noexcept;
     void Close() noexcept;
 
     void Update() noexcept;

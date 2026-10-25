@@ -48,7 +48,7 @@ void CloseHandles()
 }
 } // namespace
 
-bool ServerHost::Start()
+bool ServerHost::Start(bool aLoopbackOnly)
 {
     std::lock_guard _(s_lock);
     if (IsAlive())
@@ -85,6 +85,7 @@ bool ServerHost::Start()
     const auto password = RandomPassword();
     SetEnvironmentVariableW(L"CYBERPUNKMP_ADMIN_USERNAME", L"coop");
     SetEnvironmentVariableW(L"CYBERPUNKMP_ADMIN_PASSWORD", password.c_str());
+    SetEnvironmentVariableW(L"CYBERPUNKMP_BIND_LOOPBACK", aLoopbackOnly ? L"1" : nullptr);
 
     // Only the log is handed down, not every inheritable handle the game has open.
     const bool hasLog = log != INVALID_HANDLE_VALUE;
@@ -116,6 +117,7 @@ bool ServerHost::Start()
 
     SetEnvironmentVariableW(L"CYBERPUNKMP_ADMIN_USERNAME", nullptr);
     SetEnvironmentVariableW(L"CYBERPUNKMP_ADMIN_PASSWORD", nullptr);
+    SetEnvironmentVariableW(L"CYBERPUNKMP_BIND_LOOPBACK", nullptr);
     if (log != INVALID_HANDLE_VALUE)
         CloseHandle(log);
 

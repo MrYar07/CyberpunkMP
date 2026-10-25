@@ -23,6 +23,8 @@ struct Settings
     String username = "Player";
     // --username was given; otherwise the Steam name is used when there is one.
     bool usernameGiven = false;
+    // --password: the join password of a server that has one (sent as the auth token).
+    String password{};
     // Steam invites: the address friends get (--publicip), and connect on start (--coopjoin,
     // set by an invite's launch arguments).
     String publicIp{};

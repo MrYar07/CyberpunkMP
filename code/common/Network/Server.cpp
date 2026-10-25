@@ -36,12 +36,16 @@ Server::~Server()
     SteamInterface::Release();
 }
 
-bool Server::Host(const uint16_t aPort, uint32_t aTickRate, bool bEnableDualStackIP) noexcept
+bool Server::Host(const uint16_t aPort, uint32_t aTickRate, bool bEnableDualStackIP, bool aLoopbackOnly) noexcept
 {
     Close();
 
     SteamNetworkingIPAddr localAddress{};  // NOLINT(cppcoreguidelines-pro-type-member-init)
-    if (bEnableDualStackIP)
+    if (aLoopbackOnly)
+    {
+        localAddress.SetIPv4(0x7F000001, aPort);
+    }
+    else if (bEnableDualStackIP)
     {
         localAddress.Clear();
         localAddress.m_port = aPort;

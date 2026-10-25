@@ -41,7 +41,8 @@ void NetworkService::OnConnected()
     spdlog::info("Connected to server.");
 
     client::AuthenticationRequest request;
-    request.set_token("test");
+    // The server checks the token against its join password; a server without one ignores it.
+    request.set_token(Settings::Get().password);
     // Without --username (a game started from a Steam invite), the Steam name.
     auto username = Settings::Get().username;
     if (!Settings::Get().usernameGiven)

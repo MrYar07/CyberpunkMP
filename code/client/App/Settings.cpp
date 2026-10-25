@@ -48,6 +48,14 @@ void Settings::Load()
             settings.publicIp = (*publicIp)[0].c_str();
     }
 
+    // Join password of a server reached by address. Never put into invites or Rich Presence,
+    // which every Steam friend can read.
+    if (const auto password = launchParameters.Get("-password"); password)
+    {
+        if (password->size > 0)
+            settings.password = (*password)[0].c_str();
+    }
+
     if (launchParameters.Contains("-coopjoin"))
         settings.autoJoin = true;
 

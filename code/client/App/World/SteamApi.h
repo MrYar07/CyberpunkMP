@@ -59,6 +59,9 @@ void InviteDialog(const char* apConnect);
 void SetRichPresence(const char* apKey, const char* apValue);
 void ClearRichPresence();
 std::string PersonaName();
+// The local user and aSteamId are Steam friends (k_EFriendRelationshipFriend). False when it
+// cannot be told, so callers that gate on it fail closed.
+bool IsFriend(uint64_t aSteamId);
 
 // ISteamNetworkingMessages (thread safe)
 Identity SteamIdentity(uint64_t aSteamId);
