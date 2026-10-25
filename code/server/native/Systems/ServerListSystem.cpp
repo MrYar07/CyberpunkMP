@@ -25,6 +25,12 @@ ServerListSystem::ServerListSystem(gsl::not_null<World*> apWorld)
 
 void ServerListSystem::Tick() noexcept
 {
+    // A private server says nothing to anyone. Upstream announced every server, every minute,
+    // with public=true hard-coded - the host's address and player count to a third party, whose
+    // 403 then shut the server down (PostAnnouncement below).
+    if (!GServer->GetConfig()->GetPublic())
+        return;
+
     if (m_nextAnnounce < std::chrono::steady_clock::now())
     {
         Announce();
@@ -40,7 +46,8 @@ void ServerListSystem::Announce() noexcept
         {
             const auto& config = GServer->GetConfig();
             auto pc = static_cast<uint16_t>(m_pWorld->get<PlayerManager>()->Count());
-            PostAnnouncement(config->Name, config->Description, config->IconUrl, GServer->GetPort(), GServer->GetTickRate(), pc, 10000, config->Tags, true, false, 0);
+            PostAnnouncement(config->Name, config->Description, config->IconUrl, GServer->GetPort(), GServer->GetTickRate(), pc,
+                             config->MaxPlayer, config->Tags, config->GetPublic(), !config->Password.empty(), 0);
         })
         .detach();
 }
@@ -66,7 +73,7 @@ void ServerListSystem::PostAnnouncement(
     };
 
     httplib::Client client(kMasterServerEndpoint);
-    client.enable_server_certificate_verification(false);
+    client.enable_server_certificate_verification(true);
     client.set_read_timeout(std::chrono::milliseconds(30000));
     const auto response = client.Post("/announce", params);
 

@@ -29,10 +29,11 @@ Ported by hand (the files had diverged):
 | `98b12fa` | structural change inside an OnAdd observer | observer removed, InterpolationComponent added at both creation sites |
 | `e53b7b8` | repeat vehicle exit fired by a teleport | `s_mounted` in VehicleSystem.cpp |
 | `afad4cc` | render time held in a float froze remote players | `InterpolateEntity` works in int64 ticks |
+| `a5f60d4` | appearance maps shared across threads without a lock (`fbb7b33` depends on it) | `m_mapLock`, copy-out in `ApplyAppearance` |
 
 ## Not taken yet (conflicts; port after the first build and measurement)
 
-`dd9c074` (animation thread off a global mutex - frame rate), `a5f60d4` (appearance map locks),
+`dd9c074` (animation thread off a global mutex - frame rate),
 `124ce33`, `2ccb708`, `b2507a2` (interpolation), `5a606f1` (controller attach during exit),
 `1b20a40` (spawn queue until the world is ready), `34568c5` (bad launch argument must not crash),
 `0be76dc` (stack for the first C++ exceptions).
@@ -45,7 +46,17 @@ Ported by hand (the files had diverged):
   (`CYBERPUNKMP_BIND_LOOPBACK`, set by `ServerHost`); without Steam it listens on the network.
 - **Join password**: `config/server.json` `Password` (or `CYBERPUNKMP_SERVER_PASSWORD`) is now
   enforced; clients pass `--password=<x>`. It is not written to logs, invites or Rich Presence.
+- **No server-list announcements from a private server.** Upstream posted every server's name,
+  port and player count to cyberpunk.skyrim-together.com every minute with `public=true` hard-coded,
+  without certificate checks, and shut the server down on a 403. Now only when `Public` is true.
 - **One player per name**: a name already playing, or an empty one, is refused. A player who
   reconnects before the server noticed the old connection drop is refused until it times out.
 
-Nothing here has been compiled yet. Build steps: `docs/CAMPAIGN.md`, "Budowanie".
+## Building
+
+`.	ools\Build.ps1` (settings and why in the script). First full build: 2026-10-26, MSVC 14.44.35207,
+Windows SDK 10.0.22621.0, xmake 3.1.2, pnpm 9.15.9, .NET 9.0.302.
+
+Server smoke test (no game): starts, listens on 127.0.0.1 with `CYBERPUNKMP_BIND_LOOPBACK=1`, reports
+a required join password, loads CampaignSystem (16164 facts), EmoteSystem, JobSystem, and sends nothing
+to the server list. The client DLL has not been loaded in a game yet.
