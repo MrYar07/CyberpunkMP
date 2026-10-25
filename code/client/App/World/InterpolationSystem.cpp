@@ -69,12 +69,18 @@ inline void SetSimpleMovement(Red::vehicle::IMoveSystem* apMoveSystem, const Red
 
 void InterpolateEntity(flecs::entity aEntity, const EntityComponent& aEntityComponent, InterpolationComponent& aInterpolation, float aSimulationDelay, Red::vehicle::IMoveSystem* apMoveSystem)
 {
-    const float tick = NetworkWorldSystem::GetTick() - aSimulationDelay;
+    // Render time stays in the integer domain the ticks live in. Ticks are server milliseconds
+    // since the epoch (~1.8e12); a float's 24-bit mantissa spaces representable values 131072
+    // apart there, so `float tick = GetTick() - delay` ignored the delay, drained the whole
+    // buffer every frame and froze remote players on their spawn point. Only differences -
+    // milliseconds - may become float. Night City Online afad4cc.
+    const int64_t renderTick =
+        static_cast<int64_t>(NetworkWorldSystem::GetTick()) - static_cast<int64_t>(aSimulationDelay);
 
     while (!aInterpolation.TimePoints.empty())
     {
         auto future = *aInterpolation.TimePoints.begin();
-        if (tick > future.Tick)
+        if (renderTick > static_cast<int64_t>(future.Tick))
             aInterpolation.TimePoints.pop_front();
         else
             break;
@@ -88,10 +94,10 @@ void InterpolateEntity(flecs::entity aEntity, const EntityComponent& aEntityComp
 
     // Calculate delta movement since last update
     auto ratio = 0.0001f;
-    const auto tickDelta = static_cast<float>(second.Tick - first.Tick);
+    const auto tickDelta = static_cast<float>(static_cast<int64_t>(second.Tick) - static_cast<int64_t>(first.Tick));
     if (tickDelta > 0.0)
     {
-        ratio = 1.0f / tickDelta * (tick - first.Tick);
+        ratio = static_cast<float>(renderTick - static_cast<int64_t>(first.Tick)) / tickDelta;
     }
 
     const auto pEntityStubSystem = Red::GetGameSystem<Red::game::IEntityStubSystem>();
@@ -140,10 +146,11 @@ void InterpolateEntity(flecs::entity aEntity, const EntityComponent& aEntityComp
                 EnablePhysics(vehicle, 0x100, false);
             }
 
-            ForceMoveTo(vehicle, transform, tick - aInterpolation.PreviousFrame.Tick);
+            ForceMoveTo(vehicle, transform,
+                        static_cast<float>(renderTick - static_cast<int64_t>(aInterpolation.PreviousFrame.Tick)));
             //ForceTransform(vehicle, transform, true);
 
-            aInterpolation.PreviousFrame = InterpolationComponent::Timepoint{position, rot, 0.f, static_cast<uint64_t>(tick)};
+            aInterpolation.PreviousFrame = InterpolationComponent::Timepoint{position, rot, 0.f, static_cast<uint64_t>(renderTick)};
         }
     }
     else
@@ -158,7 +165,7 @@ void InterpolateEntity(flecs::entity aEntity, const EntityComponent& aEntityComp
             const auto pos = Red::Vector4{spaced.x, spaced.y, spaced.z, 0.f};
             aEntityComponent.Controller->SetTransform(pos, direction, speed);
 
-            aInterpolation.PreviousFrame = InterpolationComponent::Timepoint{position, glm::vec3{0.f, 0.f, direction}, speed, static_cast<uint64_t>(tick)};
+            aInterpolation.PreviousFrame = InterpolationComponent::Timepoint{position, glm::vec3{0.f, 0.f, direction}, speed, static_cast<uint64_t>(renderTick)};
         }
     }
 }
