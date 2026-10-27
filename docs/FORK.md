@@ -103,3 +103,9 @@ classes (40 functions), passes script validation and reaches the main menu with 
 CAMPAIGN and CO-OP: JOIN SERVER; Steam features are on. Fixed on the way: script bundle layouts,
 ScriptFunction flags at 0xF8 (measured), RedLib script-name takeover, the Present hook (now
 `GpuApi::GetDeviceData()`), SteamUser_v023. Not yet exercised: connecting, hosting, a world.
+
+**Player package (2026-10-28)**: `tools/friend-package/Build-FriendPackage.ps1` builds
+`CyberpunkCoop-2.5-<date>-<commit>.zip` (frameworks for 2.5, the mod and server, Russian
+instructions, uninstall with backups, log collection) plus a `-symbols` folder with the matching
+PDBs. Tested install, reinstall and uninstall on a scratch game folder. The older
+`tools/campaign/BuildInstaller.ps1` and `installer/` target 2.31 and are superseded.

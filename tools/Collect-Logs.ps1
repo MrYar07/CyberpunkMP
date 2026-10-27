@@ -1,4 +1,4 @@
-# Packs everything needed to diagnose a co-op session into one zip on the Desktop.
+﻿# Packs everything needed to diagnose a co-op session into one zip on the Desktop.
 #
 #   powershell -ExecutionPolicy Bypass -File Collect-Logs.ps1            # last 24 hours of crashes
 #   powershell -ExecutionPolicy Bypass -File Collect-Logs.ps1 -Hours 4
@@ -35,8 +35,9 @@ function Find-Game {
 
 if (-not $GameDir) { $GameDir = Find-Game }
 if (-not $GameDir -or -not (Test-Path (Join-Path $GameDir 'bin\x64\Cyberpunk2077.exe'))) {
-    throw 'Cyberpunk 2077 not found. Pass -GameDir "<game folder>".'
+    throw 'Cyberpunk 2077 не найден. Укажите папку игры: -GameDir "<папка игры>".'
 }
+$GameDir = [IO.Path]::GetFullPath($GameDir).TrimEnd('\')
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmm'
 $stage = Join-Path $env:TEMP "cyberpunk-coop-logs-$stamp"
@@ -115,11 +116,12 @@ foreach ($p in Get-ChildItem (Join-Path $GameDir 'red4ext\plugins') -Directory -
 $info += "  RED4ext loader       $((Get-Item (Join-Path $GameDir 'red4ext\RED4ext.dll') -ErrorAction SilentlyContinue).VersionInfo.ProductVersion)"
 $info += "  CET                  $(if (Test-Path (Join-Path $GameDir 'bin\x64\plugins\cyber_engine_tweaks.asi')) { 'installed' } else { 'not installed' })"
 $info | Set-Content (Join-Path $stage 'info.txt') -Encoding UTF8
+Copy-Into @((Join-Path $GameDir '_coop_installed.txt')) '.'
 
 $desktop = [Environment]::GetFolderPath('Desktop')
 $zip = Join-Path $desktop "cyberpunk-coop-logs-$env:USERNAME-$stamp.zip"
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -CompressionLevel Optimal -Force
 Remove-Item $stage -Recurse -Force
 
-Write-Host "Saved $zip ($([math]::Round((Get-Item $zip).Length / 1MB, 1)) MB, $($crashes.Count) crash report(s))." -ForegroundColor Green
-Write-Host "Send this file to the person running the co-op."
+Write-Host "Логи сохранены: $zip ($([math]::Round((Get-Item $zip).Length / 1MB, 1)) МБ, отчётов о вылетах: $($crashes.Count))." -ForegroundColor Green
+Write-Host "Отправьте этот файл тому, кто собирает кооператив."
