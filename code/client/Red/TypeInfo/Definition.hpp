@@ -1165,11 +1165,12 @@ struct ClassDefinition
             SystemBuilder<TClass>::RegisterSystem();
         }
 
-        if (auto alias = rtti->GetClassByScriptName(name))
-        {
-            rtti->scriptToNative.InsertOrAssign(name, name);
-            rtti->nativeToScript.InsertOrAssign(name, name);
-        }
+        // Codeware's RedLib re-points an existing script name at a new native type of the same
+        // name here. CyberpunkMP's native classes keep plain C++ names (VehicleSystem) and are
+        // reached by their own aliases (CyberpunkMP.World.VehicleSystem), so that took the game's
+        // own "VehicleSystem" script name away from gameVehicleSystem and the game's script
+        // validation refused to start (patch 2.5). The older RedLib never did this; neither does
+        // this copy.
     }
 
     inline static TypeInfoRegistrar s_registrar{&RegisterType, &DescribeType}; // NOLINT(cert-err58-cpp)

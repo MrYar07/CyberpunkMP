@@ -149,12 +149,18 @@ bool HookScriptValidator_Validate(void* apThis, Game::ScriptBundle* apBundler, G
     apReporter->fillErrors = true;
 
     constexpr Red::CName parentName("CyberpunkMP.ServerRpc");
+    spdlog::info("[RpcValidator] validating {} script classes", apBundler->classes.size());
+
     for (const auto klass : apBundler->classes)
     {
         std::string name = klass->name.ToString();
         if (klass->parent && klass->parent->name == parentName)
         {
             const auto pClass = Red::GetClass(klass->name);
+            spdlog::info("[RpcValidator] server RPC class {}: {} script functions, native class {}", name, klass->functions.size(),
+                         pClass ? fmt::format("already exists ({} functions, parent {})", pClass->funcs.size(),
+                                              pClass->parent ? pClass->parent->name.ToString() : "none")
+                                : std::string("absent - generating"));
             if (!pClass)
             {
                 using Descriptor = Red::ClassDescriptorDefaultImpl<RpcMock>;
@@ -167,7 +173,10 @@ bool HookScriptValidator_Validate(void* apThis, Game::ScriptBundle* apBundler, G
                 for (const auto func : klass->functions)
                 {
                     if (!ValidateFunction(klass, func, apReporter))
+                    {
+                        spdlog::warn("[RpcValidator]   rejected {}", func->name.ToString());
                         continue;
+                    }
 
                     RpcGenerator::CreateFunction(pDesc, klass, func);
                 }

@@ -57,7 +57,19 @@ bool SteamApi::Load()
     bool ok = true;
     s_steamFriends = Resolve<decltype(s_steamFriends)>(module, "SteamAPI_SteamFriends_v017", ok);
     s_steamMessages = Resolve<decltype(s_steamMessages)>(module, "SteamAPI_SteamNetworkingMessages_SteamAPI_v002", ok);
-    s_steamUser = Resolve<decltype(s_steamUser)>(module, "SteamAPI_SteamUser_v021", ok);
+    // Versioned accessors move with the game's Steamworks SDK: 2.31 shipped SteamUser_v021,
+    // 2.5 ships v023. Newest first; only GetSteamID is called, which every version keeps.
+    for (const auto* name : {"SteamAPI_SteamUser_v023", "SteamAPI_SteamUser_v022", "SteamAPI_SteamUser_v021"})
+    {
+        s_steamUser = reinterpret_cast<decltype(s_steamUser)>(GetProcAddress(module, name));
+        if (s_steamUser)
+            break;
+    }
+    if (!s_steamUser)
+    {
+        spdlog::warn("[SteamApi] no SteamAPI_SteamUser_v021..v023 in steam_api64.dll");
+        ok = false;
+    }
     s_steamUtils = Resolve<decltype(s_steamUtils)>(module, "SteamAPI_SteamNetworkingUtils_SteamAPI_v004", ok);
     s_getSteamId = Resolve<decltype(s_getSteamId)>(module, "SteamAPI_ISteamUser_GetSteamID", ok);
     s_registerCallback = Resolve<decltype(s_registerCallback)>(module, "SteamAPI_RegisterCallback", ok);

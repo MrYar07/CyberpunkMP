@@ -6,6 +6,7 @@
 #include "Core/Rendering/RenderingAgent.hpp"
 
 #include "Game/Rendering.h"
+#include <RED4ext/GpuApi/DeviceData.hpp>
 
 using namespace std::chrono_literals;
 
@@ -59,12 +60,25 @@ void Support::RenderingProvider::OnInitialize()
 
 void Support::RenderingProvider::Present(int32_t* apDeviceIndex, uint8_t aSomeSync, UINT aSyncInterval)
 {
-    const auto* pContext = Game::Rendering::Context::GetInstance();
-    auto* pSwapChain = pContext->devices[*apDeviceIndex - 1].pSwapChain;
+    // The renderer's device data through the SDK (GpuApi::SDeviceData, laid out for patch 2.5 and
+    // used by CET's overlay). The hand-mapped Game::Rendering::Context put the swap chains at
+    // 0xC97F38 and the direct queue at 0x13BC4D0; on 2.5 those read null and crashed the game in
+    // its first Present.
+    auto* pDeviceData = RED4ext::GpuApi::GetDeviceData();
+    if (!pDeviceData || !apDeviceIndex)
+        return;
+
+    const auto swapChainId = static_cast<uint32_t>(*apDeviceIndex);
+    if (!pDeviceData->swapChains.IsValidID(swapChainId) || !pDeviceData->swapChains.IsUsedID(swapChainId))
+        return;
+
+    auto* pSwapChain = pDeviceData->swapChains.GetData(swapChainId).swapChain.Get();
+    if (!pSwapChain)
+        return;
 
     if (!m_initialized)
     {
-        m_pCommandQueue = pContext->pDirectQueue;
+        m_pCommandQueue = pDeviceData->directCommandQueue.Get();
         m_pdxgiSwapChain = pSwapChain;
         Initialize();
         return;
