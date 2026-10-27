@@ -97,3 +97,9 @@ runtime.
 
 **Checked**: client and server build; `tools/CheckScripts.ps1` compiles all mod scripts against the
 2.5 game scripts with no errors or warnings.
+
+**In game on 2.5 (2026-10-27)**: with the 2.5 frameworks the mod loads, generates its 5 server RPC
+classes (40 functions), passes script validation and reaches the main menu with CO-OP: HOST
+CAMPAIGN and CO-OP: JOIN SERVER; Steam features are on. Fixed on the way: script bundle layouts,
+ScriptFunction flags at 0xF8 (measured), RedLib script-name takeover, the Present hook (now
+`GpuApi::GetDeviceData()`), SteamUser_v023. Not yet exercised: connecting, hosting, a world.
