@@ -1,6 +1,7 @@
 [submodule "vendor/RED4ext.SDK"]
 	path = vendor/RED4ext.SDK
-	url = https://github.com/tiltedphoques/RED4ext.SDK.git
+	url = https://github.com/MrYar07/RED4ext.SDK.git
+	branch = cpmp-2.5
 [submodule "vendor/ArchiveXL"]
 	path = vendor/ArchiveXL
 	url = https://github.com/psiberx/cp2077-archive-xl.git

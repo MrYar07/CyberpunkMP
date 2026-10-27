@@ -1,3 +1,9 @@
+> **This fork (branch `coop-2.5`)** runs CyberpunkMP with the story co-op campaign plugin on
+> **Cyberpunk 2077 patch 2.5**. It is built on the `campaign-coop` work by ziomek123pl4-lang and
+> core fixes from Night City Online (ofmiceandcam98-eng), both forks of the original by
+> Tilted Phoques SRL, under the same license (LICENSE.md). What changed and what is verified:
+> [docs/FORK.md](docs/FORK.md). Building: `tools/Build.ps1`.
+
 # Cyberpunk Multiplayer
 
 **CyberpunkMP** is a multiplayer mod for Cyberpunk 2077, created by Tilted 
