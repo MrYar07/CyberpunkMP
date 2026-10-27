@@ -5,7 +5,8 @@ matter is decided by the story data itself: every fact a quest or scene graph wr
 with questSetVar_NodeType is story state. Facts that the graphs only read are written by
 game code, often per player (vehicle, combat, UI), and are left out on purpose.
 
-Usage (WolvenKit CLI 8.20+ for patch 2.31, https://github.com/WolvenKit/WolvenKit/releases):
+Usage (WolvenKit CLI 8.20+ for patch 2.31, 10.0.0-beta.1+ for patch 2.5, which needs the .NET 10
+runtime; https://github.com/WolvenKit/WolvenKit/releases):
 
     python tools/campaign/extract_facts.py --game "<Cyberpunk 2077>" \
         --wolvenkit <WolvenKit.CLI.exe> --work <empty scratch dir> \
