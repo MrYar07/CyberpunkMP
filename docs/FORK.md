@@ -60,3 +60,40 @@ Windows SDK 10.0.22621.0, xmake 3.1.2, pnpm 9.15.9, .NET 9.0.302.
 Server smoke test (no game): starts, listens on 127.0.0.1 with `CYBERPUNKMP_BIND_LOOPBACK=1`, reports
 a required join password, loads CampaignSystem (16164 facts), EmoteSystem, JobSystem, and sends nothing
 to the server list. The client DLL has not been loaded in a game yet.
+
+## Patch 2.5 (2026-10-27)
+
+The game moved to 2.5 on Steam; this branch now targets it (2.31 is reachable through the
+`2_31_old` Steam branch, but nothing here is kept compatible with it).
+
+**Toolchain and libraries**
+- `vendor/RED4ext.SDK`: official SDK (2.5 types, `5246e659d`) merged into the CyberpunkMP fork on a
+  local branch `cpmp-2.5`. Layout conflicts resolved toward upstream; core library files reset to
+  upstream where the merge had mixed versions. **The branch exists only in this checkout** - it has
+  to be pushed somewhere before anyone else can clone this repository with submodules.
+- `code/client/Red`: Codeware 1.21.1's RedLib (already contains the 2.31 type-name fix).
+- `Core/RedLibCompat.hpp`: the two RedLib calls whose shape changed.
+
+**Engine layouts checked for 2.5**
+- All 42 hooked function hashes exist in 2.5's `cyberpunk2077_addresses.json`.
+- Quest structures (QuestMirror): Codeware's quest headers did not change between its 2.31 and 2.5
+  releases.
+- Sector node setups (SceneSpots): the fields read (transform, node, globalNodeID) and the node
+  buffer offset are unchanged; the repacked tail is left opaque.
+- `RawInputData` (dialog vote injection): 0x40 -> 0x48, per Codeware's 2.5 support commit.
+
+**Assumed, to verify in game** (each one is commented where it is used)
+- body gender at 0x44 of the character customization state (logged at spawn);
+- movement representation at 0x138 of `move::Component`;
+- vehicle `physicsState` at 0x260;
+- chat caret at +4 of the text input's own block;
+- `PlayerManager` vtable 0x200 (SharedPunk keeps it for 2.5).
+
+**Turned off**: the engine-on vtable call for remote cars (slot 0x328, unverified).
+
+**Not yet redone for 2.5**: `campaign_facts.txt` and `zz_CampaignCoop_GuestStart.archive` were made
+from 2.31 game files (WolvenKit CLI); `CyberpunkMP.tweak` records are checked only by TweakXL at
+runtime.
+
+**Checked**: client and server build; `tools/CheckScripts.ps1` compiles all mod scripts against the
+2.5 game scripts with no errors or warnings.
