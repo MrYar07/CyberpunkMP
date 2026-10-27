@@ -1,3 +1,4 @@
+#include <RED4ext/Scripting/Natives/entIPlacedComponent.hpp>
 #include "MultiMovementController.h"
 
 #include "AnimationData.h"
@@ -35,8 +36,8 @@ void MultiMovementController::Tick(float delta)
 
 void MultiMovementController::GetDeltaTransform(Red::Vector4& positionDelta, Red::Quaternion& rotationDelta)
 {
-    const auto& rawPosition = m_pComponent->owner->placedComponent->localTransform.Position;
-    const auto& rawRotation = m_pComponent->owner->placedComponent->localTransform.Orientation;
+    const auto& rawPosition = m_pComponent->owner->transformComponent->localTransform.Position;
+    const auto& rawRotation = m_pComponent->owner->transformComponent->localTransform.Orientation;
     const glm::vec3 pos = Game::ToGlm(rawPosition);
     const auto rot = Game::ToGlm(rawRotation);
 
@@ -113,8 +114,8 @@ void MultiMovementController::Attach(Red::move::Component& movable)
 {
     m_pComponent = &movable;
 
-    const auto& pos = movable.owner->placedComponent->localTransform.Position;
-    const auto& rot = movable.owner->placedComponent->localTransform.Orientation;
+    const auto& pos = movable.owner->transformComponent->localTransform.Position;
+    const auto& rot = movable.owner->transformComponent->localTransform.Orientation;
 
     const auto quat = Game::ToGlm(rot);
     SetTransform(Red::Vector4{pos.x, pos.y, pos.z, 0.f}, eulerAngles(quat).z, 0.f);
@@ -151,10 +152,30 @@ float MultiMovementController::GetAnimLength(Red::CName aName) const
     return m_animationDriver.GetAnimLength(aName);
 }
 
+namespace
+{
+// The movement component's representation stack, as the CyberpunkMP SDK fork mapped it at 0x138.
+// The upstream patch 2.5 SDK leaves 0x90-0x1C0 unmapped; the component's size (0x2C0) and the
+// fields it does assert (worldTransform 0x1C0, speed 0x220) did not move, so neither is this
+// assumed to. Not yet checked in game.
+struct MovementRepresentation
+{
+    Red::move::Component* parent; // 00
+    bool active;                  // 08
+    Red::DynArray<void*> stack;   // 10
+    int32_t activeIndex;          // 20
+    void* activeEntry;            // 28
+};
+static_assert(sizeof(MovementRepresentation) == 0x30);
+
+using Representation = Core::OffsetPtr<0x138, MovementRepresentation>;
+} // namespace
+
 void MultiMovementController::Reset()
 {
-    m_pComponent->representation.stack.Clear();
-    m_pComponent->representation.activeIndex = -1;
-    m_pComponent->representation.activeEntry = nullptr;
-    m_pComponent->representation.active = false;
+    auto& representation = Representation::Ref(m_pComponent);
+    representation.stack.Clear();
+    representation.activeIndex = -1;
+    representation.activeEntry = nullptr;
+    representation.active = false;
 }

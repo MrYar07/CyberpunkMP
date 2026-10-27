@@ -16,8 +16,11 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 
 $env:XMAKE_GLOBALDIR = 'F:\xmake-global'
+# Asked before the pnpm setting below exists: npm warns about it on stderr, which Stop treats
+# as a failure.
+$npmGlobal = (npm prefix -g)
 $env:npm_config_node_linker = 'hoisted'
-$env:PATH = "C:\Program Files\xmake;" + (npm prefix -g) + ";" + $env:PATH
+$env:PATH = "C:\Program Files\xmake;" + $npmGlobal + ";" + $env:PATH
 
 Push-Location $repo
 try

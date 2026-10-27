@@ -1,3 +1,4 @@
+#include <RED4ext/Scripting/Natives/entIPlacedComponent.hpp>
 #include "NetworkWorldSystem.h"
 
 #include <App/Settings.h>
@@ -47,7 +48,7 @@ bool NetworkWorldSystem::Spawn(uint64_t aServerId, const Red::Vector4& aPosition
     Red::ScriptGameInstance game;
 
     spdlog::info("[Spawn] remote id {} - ccstate {} bytes, {} equipment item(s)", aServerId, aCcstate.size(),
-                 aEquipment.size);
+                 aEquipment.size());
 
     if (!m_pCreatePuppet)
     {
@@ -72,7 +73,8 @@ bool NetworkWorldSystem::Spawn(uint64_t aServerId, const Red::Vector4& aPosition
     {
         auto reader = CMPReader(aCcstate);
         CharacterCustomizationState_Serialize(stateHandle.instance, &reader);
-        isBodyGenderMale = stateHandle.instance->isBodyGenderMale;
+        isBodyGenderMale = Game::IsBodyGenderMale(stateHandle.instance);
+        spdlog::info("[Spawn] body from ccstate: {}", isBodyGenderMale ? "male" : "female");
     }
     else
     {
@@ -342,11 +344,16 @@ void NetworkWorldSystem::UpdatePlayerLocation() const
         }
         if (auto remote_id = GetVehicleSystem()->GetVehicleRemoteId(); remote_id != std::nullopt)
         {
-            auto transform = Red::WorldTransform();
+            // The vehicle's placed component, not its rigid body: the hand-mapped rigidBody pointer
+            // (0x2D0) predates patch 2.31, and the fields around it have moved since (burnout
+            // 0x2BC -> 0x2C4, archetype 0x3A0 -> 0x3B0 in 2.5). The entity's transform component
+            // is at an offset the upstream SDK asserts, and the old note below says it reads the
+            // same.
+            if (!vehicle->transformComponent)
+                return;
+            const auto transform = vehicle->transformComponent->worldTransform;
 
-            transform = vehicle->rigidBody->currentTransform;
-
-            // const auto cEntityRotation = eulerAngles(Game::ToGlm(vehicle->placedComponent->worldTransform.Orientation));
+            // const auto cEntityRotation = eulerAngles(Game::ToGlm(vehicle->transformComponent->worldTransform.Orientation));
 
             // about the same
             // transform = vehicle->worldTransform;
@@ -363,7 +370,18 @@ void NetworkWorldSystem::UpdatePlayerLocation() const
 
             const auto cEntityPosition = transform.Position;
             const auto cEntityRotation = eulerAngles(Game::ToGlm(transform.Orientation));
-            float speed = vehicle->rigidBody->velocity.Magnitude();
+            // Speed from the distance covered since the last report of this vehicle.
+            static uint64_t s_lastVehicle = 0;
+            static glm::vec3 s_lastPosition{};
+            static uint64_t s_lastTick = 0;
+            const glm::vec3 position{cEntityPosition.x, cEntityPosition.y, cEntityPosition.z};
+            const auto tick = GetTick();
+            float speed = 0.f;
+            if (s_lastVehicle == *remote_id && tick > s_lastTick)
+                speed = glm::distance(position, s_lastPosition) / (static_cast<float>(tick - s_lastTick) / 1000.f);
+            s_lastVehicle = *remote_id;
+            s_lastPosition = position;
+            s_lastTick = tick;
 
             common::Vector3 pos;
             pos.set_x(cEntityPosition.x);
@@ -400,8 +418,8 @@ void NetworkWorldSystem::UpdatePlayerLocation() const
         // localTransform is not updated as the player walks (V moves via the character
         // controller), so it stays frozen at its spawn value. Rotation already reads
         // worldTransform on the next line - use it for position too.
-        const auto cEntityPosition = puppet->placedComponent->worldTransform.Position;
-        const auto cEntityRotation = eulerAngles(Game::ToGlm(puppet->placedComponent->worldTransform.Orientation));
+        const auto cEntityPosition = puppet->transformComponent->worldTransform.Position;
+        const auto cEntityRotation = eulerAngles(Game::ToGlm(puppet->transformComponent->worldTransform.Orientation));
 
         // Speed is measured from how far V moved (from NCO): moveComponent->speed sits at a
         // hand-mapped offset that moved on 2.31 and read about 3e8, which pinned every remote
@@ -463,8 +481,8 @@ void NetworkWorldSystem::UpdatePlayerLocation() const
     //     }
     //     else
     //     {
-    //         // if (vehicle->placedComponent) {
-    //             // entityPosition = vehicle->placedComponent->localTransform.Position;
+    //         // if (vehicle->transformComponent) {
+    //             // entityPosition = vehicle->transformComponent->localTransform.Position;
     //         // } else {
     //             // entityPosition = vehicle->worldTransform.Position;
     //             entityPosition = vehicle->rigidBody->worldPosition;
@@ -749,13 +767,13 @@ void NetworkWorldSystem::OnConnected()
 
             if (const auto pOwner = Red::Cast<Red::GameObject>(pEntity))
             {
-                if (pOwner->tags.Contains("CyberpunkMP.Vehicle"))
+                if (pOwner->tags.Contains(Red::CName("CyberpunkMP.Vehicle")))
                     return;
 
                  aEntity.emplace<EntityComponent>(aSpawning.Id, false, aSpawning.Controller);
                  aEntity.add<InterpolationComponent>();
                  aEntity.remove<SpawningComponent>();
-                 pOwner->tags.Add("CyberpunkMP.Puppet");
+                 pOwner->tags.Add(Red::CName("CyberpunkMP.Puppet"));
             }
         });
 

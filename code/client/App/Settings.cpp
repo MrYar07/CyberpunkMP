@@ -12,20 +12,20 @@ void Settings::Load()
 
     if (const auto ip = launchParameters.Get("-ip"); ip)
     {
-        if (ip->size > 0)
+        if (ip->size() > 0)
             settings.ip = (*ip)[0].c_str();
     }
 
     if (const auto port = launchParameters.Get("-port"); port)
     {
-        if (port->size > 0)
+        if (port->size() > 0)
             settings.port = std::strtoul((*port)[0].c_str(), nullptr, 10) & 0xFFFF;
     }
 
     // Players are told apart by name: the campaign plugin keys each guest's character by it.
     if (const auto username = launchParameters.Get("-username"); username)
     {
-        if (username->size > 0)
+        if (username->size() > 0)
         {
             std::string name = (*username)[0].c_str();
             // Quoted arguments come with the same stray backslashes as -rpcdir.
@@ -44,7 +44,7 @@ void Settings::Load()
 
     if (const auto publicIp = launchParameters.Get("-publicip"); publicIp)
     {
-        if (publicIp->size > 0)
+        if (publicIp->size() > 0)
             settings.publicIp = (*publicIp)[0].c_str();
     }
 
@@ -52,7 +52,7 @@ void Settings::Load()
     // which every Steam friend can read.
     if (const auto password = launchParameters.Get("-password"); password)
     {
-        if (password->size > 0)
+        if (password->size() > 0)
             settings.password = (*password)[0].c_str();
     }
 
@@ -61,7 +61,7 @@ void Settings::Load()
 
     if (const auto steamHost = launchParameters.Get("-steamhost"); steamHost)
     {
-        if (steamHost->size > 0)
+        if (steamHost->size() > 0)
             settings.steamHost = std::strtoull((*steamHost)[0].c_str(), nullptr, 10);
     }
 
@@ -78,7 +78,7 @@ void Settings::Load()
 
     if (const auto rpcDir = launchParameters.Get("-rpcdir"); rpcDir)
     {
-        if (rpcDir->size > 0)
+        if (rpcDir->size() > 0)
         {
             // For some reason cyberpunk adds a \ at the start and end of the path...
             std::string path = std::string((*rpcDir)[0].c_str());

@@ -9,6 +9,8 @@
 namespace
 {
 // Layouts from SharedPunk (github.com/alphanin9/SharedPunk, MIT): Raw/Ink/InkSystem.hpp.
+// Patch 2.5 grew each entry by 8 bytes (0x40 -> 0x48): Codeware b054150 "Support patch 2.5",
+// src/Red/Input.hpp. The stride matters - this code walks and edits the game's own array.
 struct RawInputData
 {
     Red::EInputKey key;       // 00
@@ -22,8 +24,9 @@ struct RawInputData
     uint64_t unk28;           // 28
     uint64_t unk30;           // 30
     uint64_t unk38;           // 38
+    uint64_t unk40;           // 40 - new in patch 2.5
 };
-static_assert(sizeof(RawInputData) == 0x40);
+static_assert(sizeof(RawInputData) == 0x48);
 
 // The game's own buffers are only read through this interface.
 struct RawInputBuffer
@@ -105,7 +108,7 @@ void HookPlayer_ProcessInput(Red::cp::Player* apPlayer, RawInputBuffer& aBuffer)
     if (s_locked && !s_injecting)
     {
         auto& inputs = aBuffer.GetInputs();
-        for (uint32_t i = 0; i < inputs.size;)
+        for (uint32_t i = 0; i < inputs.size();)
         {
             if (IsConfirm(inputs[i].key))
             {

@@ -81,6 +81,7 @@
 #include "Red/Specializations.hpp"
 #include "Red/TypeInfo.hpp"
 #include "Red/Utils.hpp"
+#include "Core/RedLibCompat.hpp"
 
 #include "Game/PlayerSystem.h"
 #include "Game/Entity.h"

@@ -149,7 +149,10 @@ void AddItems(Red::Handle<Red::game::Object> & object, Red::DynArray<Red::TweakD
         Red::CString placementStr;
         Red::CallStatic("gamedataTDBIDHelper", "ToStringDEBUG", placementStr, placementSlot);
 
-        auto appearanceName = EvalCName(&item_record.instance->appearanceName);
+        // The record's flat, by name: Item_Record's hand-mapped appearanceName field is gone from
+        // the patch 2.5 SDK, and the flat lookup does not depend on the record's layout.
+        Red::CName appearanceName;
+        Red::TweakDB::Get()->TryGetValue(Red::TweakDBID(item, ".appearanceName"), appearanceName);
         std::string appearance = appearanceName.ToString();
         // auto suffixes = EvalArrayTweakDBID(&item_record.instance->appearanceSuffixes);
         // for (auto const suffix : suffixes) {
@@ -211,12 +214,12 @@ void AddItems(Red::Handle<Red::game::Object> & object, Red::DynArray<Red::TweakD
                 // the puppet's async garment part-entities attached to a still-assembling
                 // entity, a plausible delayed 0xC0000005 source.
                 spdlog::warn("[Appearance] AddItemToSlot failed: entity {:x}, item {:016x}, slot {:016x}",
-                             object->id.hash, static_cast<uint64_t>(item), static_cast<uint64_t>(placementSlot));
+                             object->entityID.hash, static_cast<uint64_t>(item), static_cast<uint64_t>(placementSlot));
             }
         } else
         {
             spdlog::warn("[Appearance] GiveItem failed: entity {:x}, item {:016x}",
-                          object->id.hash, static_cast<uint64_t>(item));
+                          object->entityID.hash, static_cast<uint64_t>(item));
         }
     }
 }
@@ -236,7 +239,7 @@ bool AppearanceSystem::ApplyAppearance(Red::Handle<Red::game::Object> object)
     {
         std::lock_guard lock(m_mapLock);
 
-        const auto ccIt = m_playerCcstate.find(object.instance->id);
+        const auto ccIt = m_playerCcstate.find(object.instance->entityID);
         if (ccIt == m_playerCcstate.end())
         {
             // not our entity
@@ -244,19 +247,19 @@ bool AppearanceSystem::ApplyAppearance(Red::Handle<Red::game::Object> object)
         }
         bytes = ccIt->second;
 
-        if (const auto eqIt = m_playerEquipment.find(object.instance->id); eqIt != m_playerEquipment.end())
+        if (const auto eqIt = m_playerEquipment.find(object.instance->entityID); eqIt != m_playerEquipment.end())
             equipment = eqIt->second;
     }
 
     if (bytes.size() == 0)
     {
-        spdlog::info("no bytes for {}", object->id.hash);
+        spdlog::info("no bytes for {}", object->entityID.hash);
         return false;
     }
 
     // The player's name over their character's head (upstream had "Test" here). The muppet
     // records' own names are blanked in the tweaks, or the nameplate would read those first.
-    const auto name = GetEntityName(object.instance->id);
+    const auto name = GetEntityName(object.instance->entityID);
     if (!name.empty())
         object.instance->displayName.unk08 = Red::CString(name.c_str());
 
@@ -290,7 +293,7 @@ bool AppearanceSystem::ApplyAppearance(Red::Handle<Red::game::Object> object)
         {
             spdlog::error("[Appearance] ccstate for entity {:x} did not deserialize cleanly "
                            "(consumed {}/{} bytes, ok={}) - aborting apply, appearance stays default",
-                           object.instance->id.hash, reader.GetOffset(), bytes.size(), reader.IsOK());
+                           object.instance->entityID.hash, reader.GetOffset(), bytes.size(), reader.IsOK());
             return false;
         }
     }
@@ -419,7 +422,7 @@ bool AppearanceSystem::ApplyAppearance(Red::Handle<Red::game::Object> object)
     // it is already displaying is the part that is neither.
     // Taken now, not later: `object` is MOVED into the completion capture below, so
     // reading its id after that point reads a moved-from handle.
-    const auto objectId = object.instance->id;
+    const auto objectId = object.instance->entityID;
 
     const uint64_t ccstateHash = HashBytes(bytes.data(), bytes.size());
     bool alreadyScheduled = false;
@@ -433,7 +436,7 @@ bool AppearanceSystem::ApplyAppearance(Red::Handle<Red::game::Object> object)
     {
         spdlog::info("[Appearance] entity {:x} already wears this exact state (hash={:016x}) - "
                      "clothing applied, customization left alone",
-                     object.instance->id.hash, ccstateHash);
+                     object.instance->entityID.hash, ccstateHash);
         return true;
     }
 
@@ -445,7 +448,7 @@ bool AppearanceSystem::ApplyAppearance(Red::Handle<Red::game::Object> object)
         stateHandle.instance->GetHeadCustomization("TPP", true, keys);
         stateHandle.instance->GetHeadCustomization("face", true, keys);
         stateHandle.instance->GetHeadCustomization("hairs", true, keys);
-        if (stateHandle.instance->isBodyGenderMale) 
+        if (Game::IsBodyGenderMale(stateHandle.instance)) 
         {
             stateHandle.instance->GetHeadCustomization("beards", true, keys);
         }
@@ -485,8 +488,8 @@ bool AppearanceSystem::ApplyAppearance(Red::Handle<Red::game::Object> object)
         // engine's read regardless of when that read happens.
         auto keysStorage = std::make_shared<Red::DynArray<Red::world::EntityAppearanceChangeParameter::Key>>(std::move(keys));
         Span<Red::world::EntityAppearanceChangeParameter::Key> new_keys = {
-            .start = keysStorage->entries,
-            .end = &keysStorage->entries[keysStorage->size]
+            .start = keysStorage->Data(),
+            .end = keysStorage->Data() + keysStorage->size()
         };
         const std::function<void (void)> callback = [stateHandle = std::move(stateHandle), object = std::move(object), keysStorage](void)
         {

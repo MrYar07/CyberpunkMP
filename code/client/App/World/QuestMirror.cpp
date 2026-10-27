@@ -231,7 +231,7 @@ void Record(Red::quest::PhaseInstance* apPhase, Red::quest::NodeDefinition* apNo
 
     // The phase itself, or the nearest phase above it, holds the resource the graph came from.
     Red::Handle<Red::quest::QuestPhaseResource> resource = PhaseResource::Ref(apPhase);
-    for (auto i = static_cast<int32_t>(aContext.phaseStack.size) - 1; !resource && i >= 0; --i)
+    for (auto i = static_cast<int32_t>(aContext.phaseStack.size()) - 1; !resource && i >= 0; --i)
     {
         if (auto* pParent = aContext.phaseStack[i])
             resource = PhaseResource::Ref(pParent);

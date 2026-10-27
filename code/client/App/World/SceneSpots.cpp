@@ -7,7 +7,10 @@
 
 namespace
 {
-// Sector node data as Codeware reads it (vendor/Codeware/src/Red/StreamingSector.hpp; MIT).
+// Sector node data as Codeware reads it (src/Red/StreamingSector.hpp; MIT). Only transform,
+// node and globalNodeID are read here; they kept their offsets in patch 2.5, which repacked
+// what follows unk68 (nodeIndex became a bitfield at 0x70, per sector version), so the tail is
+// left opaque rather than named wrongly.
 struct alignas(0x10) CompiledNodeInstanceSetupInfo
 {
     Red::Transform transform;            // 00
@@ -19,17 +22,11 @@ struct alignas(0x10) CompiledNodeInstanceSetupInfo
     uint64_t globalNodeID;               // 58
     uint64_t proxyNodeID;                // 60
     Red::ResourcePath unk68;             // 68
-    float secondaryRefPointDistance;     // 70
-    float streamingDistance;             // 74
-    uint16_t nodeIndex;                  // 78
-    uint16_t unk7A;                      // 7A
-    uint16_t unk7C;                      // 7C
-    uint16_t unk7E;                      // 7E
-    uint64_t unk80;                      // 80
-    uint64_t unk88;                      // 88
+    uint8_t unk70[0x90 - 0x70];          // 70 - layout differs between sector versions
 };
 static_assert(sizeof(CompiledNodeInstanceSetupInfo) == 0x90);
 static_assert(offsetof(CompiledNodeInstanceSetupInfo, node) == 0x50);
+static_assert(offsetof(CompiledNodeInstanceSetupInfo, globalNodeID) == 0x58);
 
 using NodeSetups = Core::OffsetPtr<0x40, Red::DataBuffer>;
 

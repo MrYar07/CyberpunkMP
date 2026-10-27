@@ -1,3 +1,4 @@
+#include <RED4ext/Scripting/Natives/entIPlacedComponent.hpp>
 #include "NetworkService.h"
 
 #include "App/World/NetworkWorldSystem.h"
@@ -119,7 +120,7 @@ void NetworkService::TrySpawnCharacter()
     Red::Handle<Red::GameObject> player;
     system->GetLocalPlayerControlledGameObject(player);
 
-    if (!player || !player->placedComponent)
+    if (!player || !player->transformComponent)
         return;
 
     m_spawnSent = true;
@@ -129,8 +130,8 @@ void NetworkService::TrySpawnCharacter()
 
     // Use worldTransform: localTransform is relative and stays near-origin, which made
     // the server spawn our puppet at ~(0, 3.6, 0) instead of our actual world position.
-    const auto& cEntityPosition = player->placedComponent->worldTransform.Position;
-    const auto cEntityRotation = Game::ToGlm(player->placedComponent->worldTransform.Orientation);
+    const auto& cEntityPosition = player->transformComponent->worldTransform.Position;
+    const auto cEntityRotation = Game::ToGlm(player->transformComponent->worldTransform.Orientation);
 
     common::Vector3 pos;
     pos.set_x(cEntityPosition.x);
