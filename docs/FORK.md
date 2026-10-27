@@ -69,8 +69,8 @@ The game moved to 2.5 on Steam; this branch now targets it (2.31 is reachable th
 **Toolchain and libraries**
 - `vendor/RED4ext.SDK`: official SDK (2.5 types, `5246e659d`) merged into the CyberpunkMP fork on a
   local branch `cpmp-2.5`. Layout conflicts resolved toward upstream; core library files reset to
-  upstream where the merge had mixed versions. **The branch exists only in this checkout** - it has
-  to be pushed somewhere before anyone else can clone this repository with submodules.
+  upstream where the merge had mixed versions. Published at
+  https://github.com/MrYar07/RED4ext.SDK (branch `cpmp-2.5`); `.gitmodules` points there.
 - `code/client/Red`: Codeware 1.21.1's RedLib (already contains the 2.31 type-name fix).
 - `Core/RedLibCompat.hpp`: the two RedLib calls whose shape changed.
 
