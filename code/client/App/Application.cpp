@@ -27,12 +27,23 @@ Application::Application(RED4ext::v1::PluginHandle aPlugin, const RED4ext::v1::S
     Register<Support::MinHookProvider>();
     Register<Support::SpdlogProvider>();
     Register<Support::RedLibProvider>();
-    Register<Support::RenderingProvider>();
+
+    // The ImGui overlay only ever drew a developer menu ("Test" > Connect to 127.0.0.1) across
+    // the top of the screen, yet it hooks every Present and builds an ImGui frame each game
+    // update. Off for players; CYBERPUNKMP_DEBUG_OVERLAY=1 brings it back for development.
+    char overlayValue[2]{};
+    const bool overlay =
+        GetEnvironmentVariableA("CYBERPUNKMP_DEBUG_OVERLAY", overlayValue, sizeof(overlayValue)) == 1 && overlayValue[0] == '1';
+    if (overlay)
+        Register<Support::RenderingProvider>();
 
     Register<ThreadService>();
     Register<NetworkService>();
-    Register<DebugService>();
-    Register<ImGuiService>();
+    if (overlay)
+    {
+        Register<DebugService>();
+        Register<ImGuiService>();
+    }
     Register<RpcService>(aPlugin, aSdk);
 }
 
