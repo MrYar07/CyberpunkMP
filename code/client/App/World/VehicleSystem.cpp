@@ -10,6 +10,7 @@
 #include "NetworkWorldSystem.h"
 #include "Game/Utils.h"
 #include "App/Components/EntityComponent.h"
+#include "App/World/PuppetRegistry.h"
 #include "App/Components/AttachedComponent.h"
 #include "App/Components/SpawningComponent.h"
 #include "App/Components/InterpolationComponent.h"
@@ -340,6 +341,15 @@ bool VehicleSystem::HandleVehicleExitMessage(const PacketEvent<server::NotifyVeh
     auto characterEntity = worldSystem->GetEntityByServerId(aMessage.get_character_id());
 
     characterEntity.remove<AttachedComponent>();
+
+    // Exit grace for the idle-controller hook (PuppetRegistry): four seconds - the crash
+    // NCO saw came two seconds after the exit, doubled for slow frames. Night City Online 5a606f1.
+    if (const auto* pEntityComponent = characterEntity ? characterEntity.get<EntityComponent>() : nullptr)
+    {
+        App::PuppetRegistry::SetExitGrace(pEntityComponent->Id.hash, 4000);
+        spdlog::info("[VehicleSystem] puppet {:x} in exit grace for 4s - no controller attach during rebuild",
+                     pEntityComponent->Id.hash);
+    }
 
     return true;
 }

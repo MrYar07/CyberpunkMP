@@ -334,6 +334,16 @@ void HookIdleController_SetAnimation(Game::Controller* apController, AnimationDa
         // PuppetRegistry only touches the entity's 64-bit id.
         if (App::PuppetRegistry::Contains(pOwner->entityID.hash))
         {
+            // A vehicle exit rebuilds this puppet's components over several frames and the
+            // engine hands it a fresh idle controller mid-teardown; attaching ours into that
+            // window crashed observers. During the grace the vanilla idle runs, and ours
+            // re-attaches on the first frame after it. Night City Online 5a606f1.
+            if (App::PuppetRegistry::InExitGrace(pOwner->entityID.hash))
+            {
+                RealIdleController_SetAnimation(apController, data);
+                return;
+            }
+
             if (apController->m_type == MultiMovementController::kMulti)
                 return;
 
