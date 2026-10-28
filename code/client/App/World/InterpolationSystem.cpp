@@ -1,5 +1,7 @@
 #include "InterpolationSystem.h"
 
+#include <unordered_set>
+
 #include <App/Components/AttachedComponent.h>
 #include <App/Threading/ThreadService.h>
 #include <App/World/PuppetRegistry.h>
@@ -74,31 +76,28 @@ void InterpolateEntity(flecs::entity aEntity, const EntityComponent& aEntityComp
     // apart there, so `float tick = GetTick() - delay` ignored the delay, drained the whole
     // buffer every frame and froze remote players on their spawn point. Only differences -
     // milliseconds - may become float. Night City Online afad4cc.
-    const int64_t renderTick =
-        static_cast<int64_t>(NetworkWorldSystem::GetTick()) - static_cast<int64_t>(aSimulationDelay);
+    //
+    // A jittery remote gets a wider buffer than the session-wide delay, bounded, so the worst
+    // link no longer starves its own buffer into dead reckoning. Night City Online 2ccb708.
+    constexpr float kJitterMargin = 2.f;
+    constexpr float kMaxJitterMargin = 200.f;
+    const float jitterExtra = std::clamp(kJitterMargin * aInterpolation.ArrivalJitter, 0.f, kMaxJitterMargin);
+    const int64_t renderTick = static_cast<int64_t>(NetworkWorldSystem::GetTick()) -
+                               static_cast<int64_t>(aSimulationDelay + jitterExtra);
 
-    while (!aInterpolation.TimePoints.empty())
+    // Everything now behind render time becomes the anchor we interpolate FROM; the first
+    // sample still ahead is what we interpolate TO. Night City Online 124ce33.
+    while (!aInterpolation.TimePoints.empty() &&
+           static_cast<int64_t>(aInterpolation.TimePoints.front().Tick) <= renderTick)
     {
-        auto future = *aInterpolation.TimePoints.begin();
-        if (renderTick > static_cast<int64_t>(future.Tick))
-            aInterpolation.TimePoints.pop_front();
-        else
-            break;
+        aInterpolation.PreviousFrame = aInterpolation.TimePoints.front();
+        aInterpolation.HasPrevious = true;
+        aInterpolation.TimePoints.pop_front();
     }
 
-    if (aInterpolation.TimePoints.empty())
+    // Nothing to work from yet - the puppet has spawned but no movement has arrived.
+    if (!aInterpolation.HasPrevious)
         return;
-
-    const auto& first = aInterpolation.PreviousFrame;
-    const auto& second = aInterpolation.TimePoints.front();
-
-    // Calculate delta movement since last update
-    auto ratio = 0.0001f;
-    const auto tickDelta = static_cast<float>(static_cast<int64_t>(second.Tick) - static_cast<int64_t>(first.Tick));
-    if (tickDelta > 0.0)
-    {
-        ratio = static_cast<float>(renderTick - static_cast<int64_t>(first.Tick)) / tickDelta;
-    }
 
     const auto pEntityStubSystem = Red::GetGameSystem<Red::game::IEntityStubSystem>();
     const auto* pStub = pEntityStubSystem->FindStub(aEntityComponent.Id);
@@ -110,6 +109,37 @@ void InterpolateEntity(flecs::entity aEntity, const EntityComponent& aEntityComp
 
     if (IsHeld(aEntityComponent.Id.hash))
         return;
+
+    const auto& first = aInterpolation.PreviousFrame;
+
+    // Buffer starvation: a late packet leaves nothing ahead of render time. Carry on along
+    // the last heading for a short while rather than stutter; past that, stand still.
+    if (aInterpolation.TimePoints.empty())
+    {
+        constexpr int64_t kMaxExtrapolationMs = 250;
+
+        const auto ahead = renderTick - static_cast<int64_t>(first.Tick);
+        if (ahead <= 0 || ahead > kMaxExtrapolationMs || aEntityComponent.IsVehicle || !aEntityComponent.Controller)
+            return;
+
+        // Velocity is metres per second and the tick is milliseconds.
+        const glm::vec3 heading{-std::sin(first.Rotation.z), std::cos(first.Rotation.z), 0.f};
+        const glm::vec3 guessed = first.Position + heading * (first.Velocity * static_cast<float>(ahead) * 0.001f);
+
+        const auto spaced = SpaceFromScene(guessed, aEntityComponent.Id.hash);
+        aEntityComponent.Controller->SetTransform(Red::Vector4{spaced.x, spaced.y, spaced.z, 0.f}, first.Rotation.z,
+                                                  first.Velocity);
+        aInterpolation.LastRenderTick = renderTick;
+        return;
+    }
+
+    const auto& second = aInterpolation.TimePoints.front();
+
+    // Where render time sits between the two samples, 0..1.
+    auto ratio = 0.f;
+    const auto tickDelta = static_cast<float>(static_cast<int64_t>(second.Tick) - static_cast<int64_t>(first.Tick));
+    if (tickDelta > 0.f)
+        ratio = std::clamp(static_cast<float>(renderTick - static_cast<int64_t>(first.Tick)) / tickDelta, 0.f, 1.f);
 
     const glm::vec3 position{Lerp(first.Position, second.Position, ratio)};
 
@@ -147,11 +177,12 @@ void InterpolateEntity(flecs::entity aEntity, const EntityComponent& aEntityComp
                 EnablePhysics(vehicle, 0x100, false);
             }
 
-            ForceMoveTo(vehicle, transform,
-                        static_cast<float>(renderTick - static_cast<int64_t>(aInterpolation.PreviousFrame.Tick)));
+            // How long this move should take: the time since we last drew.
+            const auto frameDelta = aInterpolation.LastRenderTick > 0
+                                        ? static_cast<float>(std::max<int64_t>(renderTick - aInterpolation.LastRenderTick, 0))
+                                        : 16.f;
+            ForceMoveTo(vehicle, transform, frameDelta);
             //ForceTransform(vehicle, transform, true);
-
-            aInterpolation.PreviousFrame = InterpolationComponent::Timepoint{position, rot, 0.f, static_cast<uint64_t>(renderTick)};
         }
     }
     else
@@ -165,10 +196,10 @@ void InterpolateEntity(flecs::entity aEntity, const EntityComponent& aEntityComp
             const auto spaced = SpaceFromScene(position, aEntityComponent.Id.hash);
             const auto pos = Red::Vector4{spaced.x, spaced.y, spaced.z, 0.f};
             aEntityComponent.Controller->SetTransform(pos, direction, speed);
-
-            aInterpolation.PreviousFrame = InterpolationComponent::Timepoint{position, glm::vec3{0.f, 0.f, direction}, speed, static_cast<uint64_t>(renderTick)};
         }
     }
+
+    aInterpolation.LastRenderTick = renderTick;
 }
 
 void InterpolationSystem::SetSceneSpacing(bool aEnabled, const glm::vec3& aAnchor, float aYaw)
@@ -252,10 +283,38 @@ void InterpolationSystem::HandleNotifyEntityMove(const PacketEvent<server::Notif
     if (!entity)
         return;
 
-    auto* pInterpolation = entity.get_mut<InterpolationComponent>();
-
-    if (!pInterpolation->TimePoints.empty() && pInterpolation->TimePoints.back().Tick > aMessage.get_tick())
+    // Tick 0 means "has not moved yet", not a timestamp fifty-odd years ago: as an anchor it
+    // froze the remote player on their spawn point. Night City Online b2507a2.
+    if (aMessage.get_tick() == 0)
         return;
+
+    // Null until the entity's InterpolationComponent exists; a player's first movement can
+    // arrive before that.
+    auto* pInterpolation = entity.get_mut<InterpolationComponent>();
+    if (!pInterpolation)
+        return;
+
+    // Out-of-order samples are dropped - including ones older than the anchor once the
+    // buffer has drained, which would otherwise drag the puppet backwards.
+    if (!pInterpolation->TimePoints.empty())
+    {
+        if (pInterpolation->TimePoints.back().Tick > aMessage.get_tick())
+            return;
+    }
+    else if (pInterpolation->HasPrevious && pInterpolation->PreviousFrame.Tick > aMessage.get_tick())
+    {
+        return;
+    }
+
+    // Arrival jitter for this remote's interpolation margin (InterpolationComponent).
+    const int64_t transit = static_cast<int64_t>(NetworkWorldSystem::GetTick()) - static_cast<int64_t>(aMessage.get_tick());
+    if (pInterpolation->HasTransit)
+    {
+        const auto change = std::abs(transit - pInterpolation->LastTransit);
+        pInterpolation->ArrivalJitter += (static_cast<float>(change) - pInterpolation->ArrivalJitter) / 16.f;
+    }
+    pInterpolation->LastTransit = transit;
+    pInterpolation->HasTransit = true;
 
     pInterpolation->TimePoints.push_back(InterpolationComponent::Timepoint{position, rotation, aMessage.get_speed(), aMessage.get_tick()});
 }

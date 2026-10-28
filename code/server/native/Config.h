@@ -27,7 +27,9 @@ struct Config : IConfig
     uint16_t Port{11778};
     uint16_t WebPort{11779};
     uint16_t TickRate{60};
-    uint16_t UpdateRate{10};
+    // Movement updates per second: the ceiling on how smoothly anyone else can move, and it
+    // sets the clients' interpolation delay (50 + 1500 / rate ms). Night City Online 124ce33.
+    uint16_t UpdateRate{30};
     std::string Password{};
     FlecsConfig Flecs{};
 
