@@ -31,12 +31,15 @@ Ported by hand (the files had diverged):
 | `afad4cc` | render time held in a float froze remote players | `InterpolateEntity` works in int64 ticks |
 | `a5f60d4` | appearance maps shared across threads without a lock (`fbb7b33` depends on it) | `m_mapLock`, copy-out in `ApplyAppearance` |
 
-## Not taken yet (conflicts; port after the first build and measurement)
+## Ported later (2026-10-29)
 
-`dd9c074` (animation thread off a global mutex - frame rate),
-`124ce33`, `2ccb708`, `b2507a2` (interpolation), `5a606f1` (controller attach during exit),
-`1b20a40` (spawn queue until the world is ready), `34568c5` (bad launch argument must not crash),
-`0be76dc` (stack for the first C++ exceptions).
+`dd9c074` (animation thread off a global mutex) cherry-picked, conflicts kept on our 2.5 code.
+By hand, onto our integer render ticks, scene spacing and held puppets: `124ce33` + `2ccb708` +
+`b2507a2` (segment interpolation, per-remote jitter margin, tick 0 ignored; UpdateRate 10 -> 30),
+`1b20a40` (spawn queue until the world is ready, a rejoin replaces the puppet), `5a606f1` (4 s
+vehicle-exit grace for the idle-controller hook), `34568c5` (the guard only: launch-argument
+parsing degrades to defaults). Not taken: `0be76dc` - it extends a vectored exception handler
+this branch does not have. None of these can be exercised without a second player.
 
 ## Our own changes
 
