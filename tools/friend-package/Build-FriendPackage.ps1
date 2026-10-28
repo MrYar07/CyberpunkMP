@@ -7,7 +7,7 @@
 #   CyberpunkCoop-2.5-<date>-<commit>-symbols\     PDBs and the exact DLLs that went into it, for
 #                                                  tools\crash\Analyze-Crash.ps1. Not for players.
 # Package layout:
-#   install.bat, collect-logs.bat, ИНСТРУКЦИЯ.txt, LICENSES.txt, version.txt
+#   install.bat, collect-logs.bat, ИНСТРУКЦИЯ.txt, ЧЕК-ЛИСТ.txt, LICENSES.txt, version.txt
 #   data\Install-CyberpunkCoop.ps1, Uninstall-CyberpunkCoop.ps1, Collect-Logs.ps1
 #   data\frameworks\*.zip    official framework releases (the set tools\Install-Frameworks.ps1 checks)
 #   data\mod\...             game-relative: red4ext\plugins\zzzCyberpunkMP, CyberpunkCoopServer
@@ -64,6 +64,7 @@ Copy-Text (Join-Path $PSScriptRoot "Install-CyberpunkCoop.ps1") (Join-Path $data
 Copy-Text (Join-Path $PSScriptRoot "Uninstall-CyberpunkCoop.ps1") (Join-Path $data "Uninstall-CyberpunkCoop.ps1")
 Copy-Text (Join-Path $repo "tools\Collect-Logs.ps1") (Join-Path $data "Collect-Logs.ps1")
 Copy-Text (Join-Path $PSScriptRoot "ИНСТРУКЦИЯ.txt") (Join-Path $stage "ИНСТРУКЦИЯ.txt")
+Copy-Text (Join-Path $PSScriptRoot "ЧЕК-ЛИСТ.txt") (Join-Path $stage "ЧЕК-ЛИСТ.txt")
 
 $ascii = New-Object Text.ASCIIEncoding
 [IO.File]::WriteAllText((Join-Path $stage "install.bat"),
