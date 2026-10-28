@@ -94,6 +94,19 @@ private:
     mutable glm::vec3 m_lastPosition{};
     mutable std::chrono::steady_clock::time_point m_lastPositionAt{};
     mutable bool m_hasLastPosition{false};
+
+    // Spawns that arrived before the world was ready, replayed on OnWorldAttached. Mutable:
+    // DeSpawn is const and cancels a queued spawn.
+    struct PendingSpawn
+    {
+        uint64_t ServerId;
+        Red::Vector4 Position;
+        Red::Quaternion Rotation;
+        Red::DynArray<Red::TweakDBID> Equipment;
+        Vector<uint8_t> Ccstate;
+        std::string Username;
+    };
+    mutable std::vector<PendingSpawn> m_pendingSpawns;
     Red::CBaseFunction* m_pCreatePuppet;
     Red::CBaseFunction* m_pDeletePuppet;
     std::optional<uint64_t> m_remotePlayerId;

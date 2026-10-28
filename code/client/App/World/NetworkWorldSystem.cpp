@@ -41,8 +41,23 @@ NetworkWorldSystem::NetworkWorldSystem()
 
 bool NetworkWorldSystem::Spawn(uint64_t aServerId, const Red::Vector4& aPosition, const Red::Quaternion& aRotation, const Red::DynArray<Red::TweakDBID>& aEquipment, const Vector<uint8_t> aCcstate, const std::string& acUsername)
 {
+    // A spawn that beats the world attach (the server front-loads everyone already online)
+    // used to be dropped, so whoever was online first never existed for the player loading
+    // in. Queued; OnWorldAttached replays it. Night City Online 1b20a40.
     if (!m_ready)
-        return false;
+    {
+        spdlog::info("[Spawn] remote id {} arrived before the world was ready - queued", aServerId);
+        m_pendingSpawns.push_back({aServerId, aPosition, aRotation, aEquipment, aCcstate, acUsername});
+        return true;
+    }
+
+    // A spawn for an id that already has a puppet replaces it: reconnects re-announce, and a
+    // missed unload in between left a frozen duplicate behind.
+    if (GetEntityByServerId(aServerId))
+    {
+        spdlog::info("[Spawn] remote id {} already has a puppet - replacing it", aServerId);
+        DeSpawn(aServerId);
+    }
 
     const auto handle = Red::GetGameSystem<NetworkWorldSystem>();
     Red::EntityID id;
@@ -112,6 +127,9 @@ bool NetworkWorldSystem::Spawn(uint64_t aServerId, const Red::Vector4& aPosition
 
 void NetworkWorldSystem::DeSpawn(uint64_t aServerId) const
 {
+    // An unload for a spawn still queued cancels it: the player left before our world loaded.
+    std::erase_if(m_pendingSpawns, [aServerId](const PendingSpawn& aSpawn) { return aSpawn.ServerId == aServerId; });
+
     const auto entity = GetEntityByServerId(aServerId);
 
     if (!entity)
@@ -233,6 +251,16 @@ void NetworkWorldSystem::OnWorldAttached(RED4ext::world::RuntimeScene* aScene)
     m_vehicleSystem->OnWorldAttached(aScene);
 
     m_ready = true;
+
+    // Swapped out first, so a spawn arriving during the replay queues afresh.
+    if (!m_pendingSpawns.empty())
+    {
+        auto pending = std::exchange(m_pendingSpawns, {});
+        spdlog::info("[Spawn] world ready - replaying {} queued spawn(s)", pending.size());
+
+        for (const auto& spawn : pending)
+            Spawn(spawn.ServerId, spawn.Position, spawn.Rotation, spawn.Equipment, spawn.Ccstate, spawn.Username);
+    }
 }
 
 void NetworkWorldSystem::OnAfterWorldDetach()
@@ -244,6 +272,8 @@ void NetworkWorldSystem::OnAfterWorldDetach()
     spdlog::info("[NetworkWorldSystem] OnAfterWorldDetach");
     m_ready = false;
     m_inGame = false;
+    // Anything still queued belongs to the world we just left.
+    m_pendingSpawns.clear();
 
     m_interpolationSystem->OnAfterWorldDetach();
     m_chatSystem->OnAfterWorldDetach();
