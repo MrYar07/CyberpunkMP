@@ -1,6 +1,8 @@
 #include "QuestMirror.h"
+#include "SelfCheck.h"
 
 #include <RED4ext/ResourceLoader.hpp>
+#include <RED4ext/Scripting/Natives/CResource.hpp>
 #include <RED4ext/SharedSpinLock.hpp>
 #include <RED4ext/Scripting/Natives/Generated/quest/QuestsSystem.hpp>
 #include <RED4ext/Scripting/Natives/Generated/quest/PhaseInstance.hpp>
@@ -59,6 +61,39 @@ using RootPhase = Core::OffsetPtr<0x68, Red::Handle<Red::quest::PhaseInstance>>;
 
 using PhaseResource = Core::OffsetPtr<0x30, Red::Handle<Red::quest::QuestPhaseResource>>;
 using PhaseGraph = Core::OffsetPtr<0x40, Red::Handle<Red::quest::GraphDefinition>>;
+
+// SelfCheck of PhaseResource/PhaseGraph on the first phase the game runs a node in that has a
+// graph (the root phase has neither). Written once from the hook, read by CheckLayout.
+std::mutex s_phaseCheckLock;
+std::atomic<bool> s_phaseCheckDone = false;
+bool s_phaseCheckOk = false;
+std::string s_phaseCheck;
+
+struct PhaseCheck
+{
+    Red::quest::PhaseInstance* pPhase;
+    bool found;
+    bool ok;
+    std::string detail;
+};
+
+void CheckPhase(void* apContext)
+{
+    auto& check = *static_cast<PhaseCheck*>(apContext);
+    const auto& graph = PhaseGraph::Ref(check.pPhase);
+    if (!graph)
+        return;
+
+    const auto& resource = PhaseResource::Ref(check.pPhase);
+    const auto graphOk = graph->GetType()->IsA(Red::GetClass<Red::quest::GraphDefinition>());
+    const auto resourceOk = !resource || resource->GetType()->IsA(Red::GetClass<Red::CResource>());
+    check.found = true;
+    check.ok = graphOk && resourceOk;
+    check.detail = std::format("a running phase ({}): resource (0x30) {}, graph (0x40) {}",
+                               check.pPhase->GetType()->GetName().ToString(),
+                               resource ? resource->GetType()->GetName().ToString() : "null",
+                               graph->GetType()->GetName().ToString());
+}
 
 constexpr auto CreateContext = Core::RawFunc<
     /* hash = */ 3144298192UL,
@@ -272,6 +307,27 @@ void Record(Red::quest::PhaseInstance* apPhase, Red::quest::NodeDefinition* apNo
 uint8_t HookExecuteNode(Red::quest::PhaseInstance* apPhase, Red::quest::NodeDefinition* apNode, QuestContext& aContext,
                         const QuestNodeSocket& aSocket, Red::DynArray<QuestNodeSocket>& aOutputSockets)
 {
+    if (!s_phaseCheckDone && apPhase)
+    {
+        std::lock_guard _(s_phaseCheckLock);
+        if (!s_phaseCheckDone)
+        {
+            PhaseCheck check{apPhase};
+            if (!SelfCheck::Guarded(&CheckPhase, &check))
+            {
+                s_phaseCheckDone = true;
+                s_phaseCheck = "reading a running phase raised an exception";
+            }
+            else if (check.found)
+            {
+                s_phaseCheckDone = true;
+                s_phaseCheckOk = check.ok;
+                s_phaseCheck = check.detail;
+                SelfCheck::Log({"quest phases", check.ok ? SelfCheck::Status::Ok : SelfCheck::Status::Fail, check.detail});
+            }
+        }
+    }
+
     if (s_mode == static_cast<int32_t>(QuestMirror::Mode::Record) && !s_replaying && apPhase && apNode)
     {
         std::lock_guard _(s_lock);
@@ -377,6 +433,34 @@ void QuestMirror::SetMode(int32_t aMode)
     s_recorded.clear();
     s_lastSeen.clear();
     s_pending.clear();
+}
+
+bool QuestMirror::CheckLayout(std::string& aDetail)
+{
+    auto* pQuests = Red::GetGameSystem<Red::quest::QuestsSystem>();
+    if (!pQuests)
+        return false;
+
+    const auto& root = RootPhase::Ref(pQuests);
+    if (!root)
+        return false;
+
+    const auto typeName = [](Red::ISerializable* apObject) -> std::string
+    { return apObject ? apObject->GetType()->GetName().ToString() : "null"; };
+
+    const auto& resource = PhaseResource::Ref(root.instance);
+    const auto& graph = PhaseGraph::Ref(root.instance);
+    const auto rootOk = root->GetType()->IsA(Red::GetClass<Red::quest::PhaseInstance>());
+    // Null is a valid value for both; only an object of another type means a wrong offset.
+    const auto resourceOk = !resource || resource->GetType()->IsA(Red::GetClass<Red::CResource>());
+    const auto graphOk = !graph || graph->GetType()->IsA(Red::GetClass<Red::quest::GraphDefinition>());
+
+    aDetail = std::format("root phase (0x68): {}; its resource (0x30): {}; its graph (0x40): {}", typeName(root.instance),
+                          typeName(resource.instance), typeName(graph.instance));
+
+    std::lock_guard _(s_phaseCheckLock);
+    aDetail += "; " + (s_phaseCheckDone ? s_phaseCheck : std::string("no phase with a graph has run a node yet"));
+    return rootOk && resourceOk && graphOk && (!s_phaseCheckDone || s_phaseCheckOk);
 }
 
 Red::CString QuestMirror::GetSceneKey()

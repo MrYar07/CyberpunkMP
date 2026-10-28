@@ -25,6 +25,7 @@
 #include "ChoiceInput.h"
 #include "QuestMirror.h"
 #include "CoopConnect.h"
+#include "SelfCheck.h"
 
 static uint64_t GTick = 0;
 
@@ -573,6 +574,11 @@ void NetworkWorldSystem::SetQuestMirror(int32_t aMode)
 Red::CString NetworkWorldSystem::OpenSteamInvite()
 {
     return CoopConnect::OpenInviteDialog();
+}
+
+Red::CString NetworkWorldSystem::RunSelfCheck(const Red::Handle<Red::GameObject>& aPlayer, const Red::Handle<Red::GameObject>& aVehicle)
+{
+    return SelfCheck::Run(aPlayer, aVehicle);
 }
 
 bool NetworkWorldSystem::HostCampaign()

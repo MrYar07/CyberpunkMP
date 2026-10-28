@@ -109,3 +109,14 @@ ScriptFunction flags at 0xF8 (measured), RedLib script-name takeover, the Presen
 instructions, uninstall with backups, log collection) plus a `-symbols` folder with the matching
 PDBs. Tested install, reinstall and uninstall on a scratch game folder. The older
 `tools/campaign/BuildInstaller.ps1` and `installer/` target 2.31 and are superseded.
+
+**Self-check of hand-mapped layouts (2026-10-29)**: `App/World/SelfCheck.{h,cpp}` compares each
+hand-mapped field with something the running game answers, under SEH, once per spawn and on
+`/coop selfcheck`. Body gender now comes from the game's own `IsBodyGenderMale` through RTTI
+(the 0x44 byte is only a fallback). Solo host on 2.5, Nomad start, female V: gender (game function,
+rebuilt copy and puppet agree; byte 0x44 agrees too), movement representation 0x138 (points back at
+its component) and owner 0x90 (the player), quest root phase 0x68 (questRootInstance) and a running
+phase's resource 0x30 (questQuestResource) and graph 0x40 (questGraphDefinition) - all OK. Not yet
+run: the vehicle check (isOnGround 0x25C, physicsState 0x260, acceleration 0x264), which needs V in a
+car. `Game::FindComponent` was fixed for the 2.5 entity layout (`components` at 0xA0). The caret
+offset in `inkTextInputWidget.cpp` is unused: no script calls `MoveCaret`.

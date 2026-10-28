@@ -63,6 +63,8 @@ struct NetworkWorldSystem : RED4ext::IGameSystem, Core::HookingAgent, flecs::wor
     Red::CString TakeQuestNodes();
     Red::CString GetSceneKey();
     Red::CString OpenSteamInvite();
+    // "/coop selfcheck": hand-mapped layouts against the running game (SelfCheck.h).
+    Red::CString RunSelfCheck(const Red::Handle<Red::GameObject>& aPlayer, const Red::Handle<Red::GameObject>& aVehicle);
     bool HostCampaign();
     Red::CString GetHostStatus();
     void ReplayQuestNodes(const Red::CString& aEntries);
@@ -121,6 +123,7 @@ RTTI_DEFINE_CLASS(NetworkWorldSystem, {
     RTTI_METHOD(SetQuestMirror);
     RTTI_METHOD(GetSceneKey);
     RTTI_METHOD(OpenSteamInvite);
+    RTTI_METHOD(RunSelfCheck);
     RTTI_METHOD(HostCampaign);
     RTTI_METHOD(GetHostStatus);
     RTTI_METHOD(TakeQuestNodes);

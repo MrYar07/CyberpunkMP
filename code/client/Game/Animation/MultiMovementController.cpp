@@ -157,7 +157,7 @@ namespace
 // The movement component's representation stack, as the CyberpunkMP SDK fork mapped it at 0x138.
 // The upstream patch 2.5 SDK leaves 0x90-0x1C0 unmapped; the component's size (0x2C0) and the
 // fields it does assert (worldTransform 0x1C0, speed 0x220) did not move, so neither is this
-// assumed to. Not yet checked in game.
+// assumed to. CheckRepresentation (SelfCheck) tests it on the local player's component.
 struct MovementRepresentation
 {
     Red::move::Component* parent; // 00
@@ -170,6 +170,18 @@ static_assert(sizeof(MovementRepresentation) == 0x30);
 
 using Representation = Core::OffsetPtr<0x138, MovementRepresentation>;
 } // namespace
+
+bool MultiMovementController::CheckRepresentation(Red::move::Component* apComponent, std::string& aDetail)
+{
+    const auto& representation = Representation::Ref(apComponent);
+    const auto size = representation.stack.size();
+    aDetail = std::format("parent {} (component {}), active {}, {} entr{}, active index {}",
+                          static_cast<void*>(representation.parent), static_cast<void*>(apComponent),
+                          static_cast<int>(*reinterpret_cast<const uint8_t*>(&representation.active)), size,
+                          size == 1 ? "y" : "ies", representation.activeIndex);
+    return representation.parent == apComponent && size < 64 && representation.activeIndex >= -1 &&
+           representation.activeIndex < static_cast<int32_t>(size);
+}
 
 void MultiMovementController::Reset()
 {

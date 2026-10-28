@@ -52,6 +52,10 @@ struct MultiMovementController
 
     void Reset();
 
+    // SelfCheck: the representation block Reset() clears starts with a pointer back to its
+    // component, so a block at the right offset points at apComponent.
+    static bool CheckRepresentation(Red::move::Component* apComponent, std::string& aDetail);
+
     Type m_type = kMulti;
     bool m_attached = false;
     bool m_highPriotiry = false;

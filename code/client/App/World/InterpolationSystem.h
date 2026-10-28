@@ -24,6 +24,10 @@ struct InterpolationSystem : RED4ext::IScriptable, Core::HookingAgent
     // where it is until released.
     static void SetHeld(uint64_t aEntityHash, bool aHeld);
 
+    // vehicle::BaseObject physicsState: between isOnGround (0x25C) and acceleration (0x264), which
+    // the upstream SDK asserts for patch 2.5 but no longer names this field.
+    static constexpr size_t kVehiclePhysicsState = 0x260;
+
 protected:
 
     void HandleNotifyEntityMove(const PacketEvent<server::NotifyEntityMove>& aMessage);

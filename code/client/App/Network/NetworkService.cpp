@@ -9,6 +9,7 @@
 #include "Game/CharacterCustomizationSystem.h"
 #include "App/Settings.h"
 #include "App/World/CoopConnect.h"
+#include "App/World/SelfCheck.h"
 
 NetworkService::NetworkService()
     : Client(client::kIdentifier, server::kIdentifier)
@@ -158,6 +159,7 @@ void NetworkService::TrySpawnCharacter()
         auto writer = CMPWriter();
         CharacterCustomizationState_Serialize(stateHandle->instance, &writer);
         spdlog::info("Got bytes: {}", writer.bytes.size());
+        SelfCheck::CheckGender(stateHandle->instance, writer.bytes, player);
         request.set_ccstate(writer.bytes);
     }
     else
@@ -166,6 +168,9 @@ void NetworkService::TrySpawnCharacter()
     }
 
     Send(request);
+
+    // Once per spawn, in every session: hand-mapped layouts against the running game.
+    SelfCheck::Run(player, {});
 }
 
 ScratchAllocator& NetworkService::GetScratch()

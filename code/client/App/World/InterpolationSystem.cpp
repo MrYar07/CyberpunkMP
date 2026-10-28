@@ -141,9 +141,7 @@ void InterpolateEntity(flecs::entity aEntity, const EntityComponent& aEntityComp
             SetSimpleMovement(apMoveSystem, aEntityComponent.Id, true);
 
             // modeled after DriveToPoint::OnUpdate_Internal, 3713079867
-            // physicsState sits between isOnGround (0x25C) and acceleration (0x264), both asserted
-            // at those offsets for patch 2.5 by the upstream SDK, which no longer names it.
-            using PhysicsState = Core::OffsetPtr<0x260, uint32_t>;
+            using PhysicsState = Core::OffsetPtr<InterpolationSystem::kVehiclePhysicsState, uint32_t>;
             if ((PhysicsState::Ref(vehicle) & 0x100) == 0)
             {
                 EnablePhysics(vehicle, 0x100, false);

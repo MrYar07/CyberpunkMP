@@ -31,7 +31,7 @@ Red::Handle<T> FindComponent(Red::Entity* apEntity)
     static auto pClass = Red::ResolveClass<T>();
     if (pClass && apEntity)
     {
-        for (auto& component : apEntity->componentsStorage.components)
+        for (auto& component : apEntity->components)
         {
             if (component && component->GetType()->IsA(pClass))
                 return Red::Cast<T>(component);

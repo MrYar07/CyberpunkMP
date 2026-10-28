@@ -268,6 +268,14 @@ public class CampaignStory extends ScriptableSystem {
             return;
         }
 
+        if Equals(verb, "selfcheck") {
+            let player = this.Player();
+            if IsDefined(player) {
+                this.Reply(GameInstance.GetNetworkWorldSystem().RunSelfCheck(player, player.GetMountedVehicle()));
+            }
+            return;
+        }
+
         if Equals(verb, "where") {
             let player = this.Player();
             if IsDefined(player) {
@@ -317,7 +325,7 @@ public class CampaignStory extends ScriptableSystem {
             this.Reply(s"poses removed for \(scene)");
             return;
         }
-        this.Reply("/coop scene | move <n> <right> <forward> [up] [yaw] | save | clear | hide | where | invite");
+        this.Reply("/coop scene | move <n> <right> <forward> [up] [yaw] | save | clear | hide | where | invite | selfcheck");
     }
 
     // Shown in this player's chat only.

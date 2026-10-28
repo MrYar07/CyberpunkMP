@@ -37,4 +37,10 @@ struct QuestMirror : Core::HookingAgent
 
     // Runs queued nodes whose resources are loaded.
     static void Update();
+
+    // SelfCheck: the root phase (0x68 on the quests system) and the resource (0x30) and graph
+    // (0x40) of phases must hold objects of the expected types. Fills aDetail with what was
+    // found (empty when there is nothing to check yet). May fault on a wrong layout; SelfCheck
+    // runs it under SEH.
+    static bool CheckLayout(std::string& aDetail);
 };

@@ -30,6 +30,9 @@ public native class NetworkWorldSystem extends IGameSystem {
     // Opens the Steam overlay's invite dialog for this server; returns the address friends
     // get, empty without Steam.
     public native func OpenSteamInvite() -> String;
+    // Checks the client's hand-mapped engine layouts against this game ("/coop selfcheck");
+    // returns a summary, details go to CyberpunkMP.log.
+    public native func RunSelfCheck(player: ref<GameObject>, vehicle: ref<GameObject>) -> String;
     // Starts the bundled server on this computer, connects to it and lets Steam friends in
     // through the Steam tunnel. Disconnect() ends it.
     public native func HostCampaign() -> Bool;
