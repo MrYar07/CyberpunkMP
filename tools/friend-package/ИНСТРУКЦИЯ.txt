@@ -26,7 +26,8 @@
    - проверит версию игры (2.5) и Phantom Liberty;
    - сделает копию ваших сохранений в «Документы» (CyberpunkCoop_сохранения_<дата>.zip);
    - поставит фреймворки: RED4ext, redscript, ArchiveXL, TweakXL, Codeware, Input Loader,
-     Cyber Engine Tweaks (если у вас уже стоят более новые — не тронет);
+     Cyber Engine Tweaks (более новые RED4ext, ArchiveXL, TweakXL и Codeware не тронет;
+     redscript, Input Loader и CET ставятся из пакета — удаление вернёт ваши прежние);
    - поставит мод кооператива;
    - сохранит копии всех файлов, которые заменил, чтобы удаление вернуло всё как было.
 5. Один раз настройте запуск в Steam:

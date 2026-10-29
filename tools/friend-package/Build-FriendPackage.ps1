@@ -68,7 +68,10 @@ Copy-Text (Join-Path $PSScriptRoot "ЧЕК-ЛИСТ.txt") (Join-Path $stage "Ч�
 
 $ascii = New-Object Text.ASCIIEncoding
 [IO.File]::WriteAllText((Join-Path $stage "install.bat"),
-    "@echo off`r`nrem Cyberpunk 2077 co-op - installer, see the instructions file next to it.`r`npowershell -NoProfile -ExecutionPolicy Bypass -File `"%~dp0data\Install-CyberpunkCoop.ps1`"`r`n", $ascii)
+    ("@echo off`r`nrem Cyberpunk 2077 co-op - installer, see the instructions file next to it.`r`n" +
+     "if not exist `"%~dp0data\Install-CyberpunkCoop.ps1`" (`r`n    echo Unpack the whole archive into a folder first, then run install.bat from that folder.`r`n    pause`r`n    exit /b 1`r`n)`r`n" +
+     "powershell -NoProfile -ExecutionPolicy Bypass -File `"%~dp0data\Install-CyberpunkCoop.ps1`"`r`n" +
+     "if errorlevel 1 pause`r`n"), $ascii)
 [IO.File]::WriteAllText((Join-Path $stage "collect-logs.bat"),
     "@echo off`r`nrem Cyberpunk 2077 co-op - packs the logs into a zip on the Desktop.`r`npowershell -NoProfile -ExecutionPolicy Bypass -File `"%~dp0data\Collect-Logs.ps1`"`r`npause`r`n", $ascii)
 
@@ -76,8 +79,10 @@ $ascii = New-Object Text.ASCIIEncoding
 $notices = @()
 foreach ($f in $frameworks) {
     Copy-Item (Join-Path $Deps $f.Zip) (New-Item -ItemType Directory -Force (Join-Path $data "frameworks")) -Force
-    $license = & $gh api "repos/$($f.Repo)/license" -q ".content" 2>$null
-    $text = if ($LASTEXITCODE -eq 0 -and $license) { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($license -join ""))) } else { "See https://github.com/$($f.Repo)" }
+    # Under 'Stop', stderr from gh or a missing gh.exe would throw; the link is the fallback.
+    $license = $null
+    try { if (Test-Path -LiteralPath $gh) { $license = & $gh api "repos/$($f.Repo)/license" -q ".content" 2>$null } } catch { $license = $null }
+    $text = if ($license) { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($license -join ""))) } else { "See https://github.com/$($f.Repo)" }
     $notices += "==== $($f.Name) - https://github.com/$($f.Repo) ====`r`n$($text.Trim())`r`n"
 }
 

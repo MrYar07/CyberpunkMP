@@ -22,7 +22,7 @@ function Find-Game {
     $libraries = @($steam.Replace('/', '\'))
     $vdf = Join-Path $steam 'steamapps\libraryfolders.vdf'
     if (Test-Path $vdf) {
-        foreach ($m in [regex]::Matches((Get-Content $vdf -Raw), '"path"\s+"([^"]+)"')) {
+        foreach ($m in [regex]::Matches([IO.File]::ReadAllText($vdf, [Text.Encoding]::UTF8), '"path"\s+"([^"]+)"')) {
             $libraries += $m.Groups[1].Value.Replace('\\', '\')
         }
     }

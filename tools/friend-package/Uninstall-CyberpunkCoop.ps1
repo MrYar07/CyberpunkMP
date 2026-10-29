@@ -41,12 +41,19 @@ if (Get-Process -Name Cyberpunk2077, Server.Loader -ErrorAction SilentlyContinue
     Finish 1
 }
 
+$probe = Join-Path $GameDir '_coop_write_test.tmp'
+try { [IO.File]::WriteAllText($probe, 'x'); Remove-Item -LiteralPath $probe -Force }
+catch {
+    Say 'Нет прав на запись в папку игры. Правый клик по CyberpunkCoop-Uninstall.bat → «Запуск от имени администратора».' 'Red'
+    Finish 1
+}
+
 $answer = Read-Host "Удалить кооператив из '$GameDir'? (д/н)"
 if ($answer -notmatch '^[дДyY]') { exit 0 }
 
 $removed = 0
 $emptied = @()
-foreach ($relative in Get-Content $listPath -Encoding UTF8 | Where-Object { $_ -and -not $_.StartsWith('#') }) {
+foreach ($relative in Get-Content -LiteralPath $listPath -Encoding UTF8 | Where-Object { $_ -and -not $_.StartsWith('#') }) {
     $path = [IO.Path]::GetFullPath((Join-Path $GameDir $relative))
     if (-not $path.StartsWith($GameDir + '\', [StringComparison]::OrdinalIgnoreCase)) { continue }
     if (Test-Path -LiteralPath $path -PathType Leaf) { Remove-Item -LiteralPath $path -Force; $removed++ }
@@ -92,9 +99,14 @@ if (Test-Path (Join-Path $GameDir 'CyberpunkCoopServer\campaigns')) {
 }
 Say 'Параметр запуска --online в Steam уберите сами.'
 Say ''
-Read-Host 'Нажмите Enter, чтобы закрыть'
 
-# Этот скрипт и его bat ещё открыты; удаляем их после выхода.
+# Этот скрипт и его bat ещё открыты: их убирает отдельный процесс, когда это окно закроется -
+# хоть по Enter, хоть крестиком.
 $self = Join-Path $GameDir '_coop_tools'
 $bat = Join-Path $GameDir 'CyberpunkCoop-Uninstall.bat'
-Start-Process cmd.exe -WindowStyle Hidden -ArgumentList "/c timeout /t 2 /nobreak >nul & rd /s /q `"$self`" & del /f /q `"$bat`""
+$cleanup = "Wait-Process -Id $PID -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2; " +
+           "Remove-Item -LiteralPath '$($self.Replace("'", "''"))' -Recurse -Force -ErrorAction SilentlyContinue; " +
+           "Remove-Item -LiteralPath '$($bat.Replace("'", "''"))' -Force -ErrorAction SilentlyContinue"
+Start-Process powershell.exe -WindowStyle Hidden -ArgumentList '-NoProfile', '-Command', $cleanup
+
+Read-Host 'Нажмите Enter, чтобы закрыть'

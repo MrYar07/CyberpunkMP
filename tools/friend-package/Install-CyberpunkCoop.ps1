@@ -39,7 +39,7 @@ function Find-Game {
     $libraries = @($steam.Replace('/', '\'))
     $vdf = Join-Path $steam 'steamapps\libraryfolders.vdf'
     if (Test-Path $vdf) {
-        foreach ($m in [regex]::Matches((Get-Content $vdf -Raw), '"path"\s+"([^"]+)"')) {
+        foreach ($m in [regex]::Matches([IO.File]::ReadAllText($vdf, [Text.Encoding]::UTF8), '"path"\s+"([^"]+)"')) {
             $libraries += $m.Groups[1].Value.Replace('\\', '\')
         }
     }
@@ -71,11 +71,11 @@ if (-not $GameDir) {
 }
 $GameDir = $GameDir.Trim().Trim('"')
 $exe = Join-Path $GameDir 'bin\x64\Cyberpunk2077.exe'
-if (-not (Test-Path $exe)) { Fail "В папке '$GameDir' нет bin\x64\Cyberpunk2077.exe." }
+if (-not (Test-Path -LiteralPath $exe)) { Fail "В папке '$GameDir' нет bin\x64\Cyberpunk2077.exe." }
 $GameDir = [IO.Path]::GetFullPath($GameDir).TrimEnd('\')
 Say "Игра: $GameDir"
 
-$patch = (Get-Item $exe).VersionInfo.ProductVersion
+$patch = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion
 if ($patch -ne $expectedPatch) {
     Fail "Установлен патч $patch, а этот кооператив собран для $expectedPatch. Обновите игру в Steam (публичная ветка, без бета-версий)."
 }
@@ -97,10 +97,19 @@ $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $backupRoot = Join-Path $GameDir "_coop_backup\$stamp"
 $listPath = Join-Path $GameDir '_coop_installed.txt'
 $previous = @()
-if (Test-Path $listPath) { $previous = @(Get-Content $listPath -Encoding UTF8 | Where-Object { $_ -and -not $_.StartsWith('#') }) }
+if (Test-Path -LiteralPath $listPath) { $previous = @(Get-Content -LiteralPath $listPath -Encoding UTF8 | Where-Object { $_ -and -not $_.StartsWith('#') }) }
 $ours = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 foreach ($p in $previous) { [void]$ours.Add($p) }
 $installed = New-Object System.Collections.Generic.List[string]
+$utf8 = New-Object System.Text.UTF8Encoding($true)
+$header = @("# Установлено кооперативом Cyberpunk 2077. Последняя установка: $stamp", '# Копии заменённых файлов: _coop_backup\<дата>')
+
+# Список пишется по ходу установки: если она прервётся, повторный запуск и удаление
+# всё равно знают, какие файлы уже наши.
+function Save-List {
+    $all = @($previous) + @($installed) | Select-Object -Unique
+    [IO.File]::WriteAllLines($listPath, [string[]]($header + $all), $utf8)
+}
 
 # Пишет файл в игру. Чужой файл, который там уже лежал, сначала копируется в бэкап;
 # свои файлы от прошлой установки в бэкап не идут, иначе удаление вернуло бы их назад.
@@ -109,15 +118,15 @@ function Write-GameFile($aRelative, [scriptblock]$aWrite) {
     if (-not $target.StartsWith($GameDir + '\', [StringComparison]::OrdinalIgnoreCase)) {
         throw "Попытка записи вне папки игры: $aRelative"
     }
-    if ((Test-Path $target) -and $ours.Add($aRelative)) {
+    if ((Test-Path -LiteralPath $target) -and $ours.Add($aRelative)) {
         $copy = Join-Path $backupRoot $aRelative
         New-Item -ItemType Directory -Force (Split-Path $copy) | Out-Null
-        Copy-Item $target $copy -Force
+        Copy-Item -LiteralPath $target -Destination $copy -Force
     }
     [void]$ours.Add($aRelative)
+    $installed.Add($aRelative)
     New-Item -ItemType Directory -Force (Split-Path $target) | Out-Null
     & $aWrite $target
-    $installed.Add($aRelative)
 }
 
 # ---- 2. сохранения ----
@@ -132,7 +141,8 @@ if (-not $SkipSavesBackup -and (Test-Path $saves) -and (Get-ChildItem $saves -Re
 
 # ---- 3. фреймворки ----
 # Архив, главный файл (по нему смотрим версию) и версия в пакете. Без главного файла —
-# ставится всегда: у этих архивов нет версии в файлах, а на 2.5 нужны именно эти или новее.
+# ставится всегда (у redscript, Input Loader и CET нет версии в файлах); заменённое
+# возвращает удаление.
 $frameworks = @(
     @{ Name = 'RED4ext';             Zip = 'red4ext-1.31.0.zip';            Main = 'red4ext\RED4ext.dll';                     Version = '1.31.0' },
     @{ Name = 'redscript';           Zip = 'redscript-v0.5.32-windows.zip'; Main = $null;                                     Version = $null },
@@ -166,6 +176,7 @@ foreach ($fw in $frameworks) {
         }
     }
     finally { $archive.Dispose() }
+    Save-List
     Say "  $($fw.Name): установлен" 'Green'
 }
 
@@ -173,12 +184,26 @@ foreach ($fw in $frameworks) {
 Say ''
 Say 'Мод кооператива:' 'Cyan'
 $modRoot = Join-Path $here 'data\mod'
-foreach ($file in Get-ChildItem $modRoot -Recurse -File) {
+$modFiles = @(Get-ChildItem -LiteralPath $modRoot -Recurse -File)
+
+# Файлы мода и сервера от прошлой сборки, которых в этой нет, удаляются: иначе старые
+# скрипты и архивы мода продолжили бы загружаться. Настройки и кампании сервера остаются.
+$shipped = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+foreach ($file in $modFiles) { [void]$shipped.Add($file.FullName.Substring($modRoot.Length + 1)) }
+$previous = @($previous | Where-Object {
+    $stale = ($_ -match '^(red4ext\\plugins\\zzzCyberpunkMP|CyberpunkCoopServer)\\') -and
+             ($_ -notmatch '^CyberpunkCoopServer\\(config|campaigns|logs)\\') -and -not $shipped.Contains($_)
+    if ($stale) { Remove-Item -LiteralPath (Join-Path $GameDir $_) -Force -ErrorAction SilentlyContinue }
+    -not $stale
+})
+
+foreach ($file in $modFiles) {
     $relative = $file.FullName.Substring($modRoot.Length + 1)
     # Настройки, кампании и логи уже установленного сервера не трогаем.
     if ($relative -match '^CyberpunkCoopServer\\(config|campaigns|logs)\\') { continue }
     Write-GameFile $relative { param($t) Copy-Item -LiteralPath $file.FullName -Destination $t -Force }
 }
+Save-List
 Say '  CyberpunkMP и сервер кооператива: установлены' 'Green'
 
 # Удаление и сбор логов — копии в папке игры, чтобы работали и без этого пакета.
@@ -192,9 +217,7 @@ $bat = "@echo off`r`npowershell -NoProfile -ExecutionPolicy Bypass -File `"%~dp0
 [IO.File]::WriteAllText((Join-Path $GameDir 'CyberpunkCoop-Logs.bat'), ($bat -f 'Collect-Logs.ps1', "pause`r`n"))
 
 # ---- 5. список для удаления ----
-$all = @($previous) + @($installed) | Select-Object -Unique
-$header = @("# Установлено кооперативом Cyberpunk 2077. Последняя установка: $stamp", '# Копии заменённых файлов: _coop_backup\<дата>')
-[IO.File]::WriteAllLines($listPath, [string[]]($header + $all), (New-Object System.Text.UTF8Encoding($true)))
+Save-List
 
 # ---- .NET 8: нужен только хосту ----
 $hasNet8 = $false
