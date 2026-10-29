@@ -216,6 +216,12 @@ void SelfCheck::CheckGender(Red::game::ui::CharacterCustomizationState* apState,
     s_gender = result;
 }
 
+void SelfCheck::SkipGender(const char* acReason)
+{
+    std::lock_guard _(s_lock);
+    s_gender = Make("gender", Status::Skip, acReason);
+}
+
 Red::CString SelfCheck::Run(const Red::Handle<Red::GameObject>& aPlayer, const Red::Handle<Red::GameObject>& aVehicle)
 {
     if (!aPlayer)
@@ -232,7 +238,7 @@ Red::CString SelfCheck::Run(const Red::Handle<Red::GameObject>& aPlayer, const R
     results.push_back(CheckQuests());
 
     int ok = 0, fail = 0, skip = 0;
-    std::string failed;
+    std::string failed, skipped;
     for (const auto& result : results)
     {
         Log(result);
@@ -240,13 +246,15 @@ Red::CString SelfCheck::Run(const Red::Handle<Red::GameObject>& aPlayer, const R
         {
         case Status::Ok: ++ok; break;
         case Status::Fail: ++fail; failed += " " + result.name; break;
-        case Status::Skip: ++skip; break;
+        case Status::Skip: ++skip; skipped += " " + result.name; break;
         }
     }
 
     auto summary = std::format("selfcheck: {} OK, {} FAIL, {} skipped", ok, fail, skip);
     if (fail)
         summary += " - failed:" + failed;
+    if (skip)
+        summary += " - skipped:" + skipped;
     summary += " (details in CyberpunkMP.log)";
     spdlog::info("[SelfCheck] {}", summary);
     return summary.c_str();

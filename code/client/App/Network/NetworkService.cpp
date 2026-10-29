@@ -165,6 +165,7 @@ void NetworkService::TrySpawnCharacter()
     else
     {
         spdlog::info("CustomizationState was null");
+        SelfCheck::SkipGender("no customization state at this spawn - no appearance was sent");
     }
 
     Send(request);

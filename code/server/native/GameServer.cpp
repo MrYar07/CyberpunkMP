@@ -69,12 +69,30 @@ GameServer::GameServer()
 
             std::ofstream of(serverPath / "config" / "server.json");
             json data = m_config;
+            data["ConfigVersion"] = 1;
             of << std::setw(4) << data;
         }
         else
         {
             json data = json::parse(config);
             m_config = data.get<Config>();
+            config.close();
+
+            // Configs written before UpdateRate's default went from 10 to 30 still carry the
+            // old default, which kept remote players on 100 ms samples and a 200 ms delay.
+            // Migrated once; the marker keeps a rate the host sets afterwards.
+            if (!data.contains("ConfigVersion"))
+            {
+                if (m_config.UpdateRate == 10)
+                {
+                    m_config.UpdateRate = 30;
+                    spdlog::info("config/server.json: UpdateRate 10 -> 30 (new default)");
+                }
+                json migrated = m_config;
+                migrated["ConfigVersion"] = 1;
+                std::ofstream of(serverPath / "config" / "server.json");
+                of << std::setw(4) << migrated;
+            }
         }
     }
     catch (std::exception& e)

@@ -821,6 +821,9 @@ void NetworkWorldSystem::OnConnected()
 
 void NetworkWorldSystem::OnDisconnected(Client::EDisconnectReason aReason)
 {
+    // Spawns queued for a connection that is gone must not be replayed into the next world.
+    m_pendingSpawns.clear();
+
     each([this](flecs::entity entity, EntityComponent&)
         {
             DeSpawn(entity.raw_id());

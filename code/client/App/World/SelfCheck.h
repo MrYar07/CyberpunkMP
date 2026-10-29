@@ -38,6 +38,9 @@ void Log(const Result& aResult);
 void CheckGender(Red::game::ui::CharacterCustomizationState* apState, const Vector<uint8_t>& aBytes,
                  const Red::Handle<Red::GameObject>& aPlayer);
 
+// For a spawn without a customization state: replaces an earlier spawn's result.
+void SkipGender(const char* acReason);
+
 // Everything else; the gender result from the last spawn is included. aVehicle may be null.
 // Returns a one-line summary for the chat.
 Red::CString Run(const Red::Handle<Red::GameObject>& aPlayer, const Red::Handle<Red::GameObject>& aVehicle);
